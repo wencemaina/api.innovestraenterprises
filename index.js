@@ -1,6 +1,9 @@
 const express = require("express");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const userRoutes = require("./routes/usersRoutes");
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -9,6 +12,9 @@ app.use(express.json());
 app.get("/", (req, res) => {
 	res.send("Welcome to innovestraenterprises.co.ke API");
 });
+
+// Use the user routes
+app.use("/api/users", userRoutes);
 
 // Start server
 app.listen(PORT, () => {
