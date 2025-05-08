@@ -1,11 +1,20 @@
 const express = require("express");
-const { connectToMongo } = require("./db"); // Adjust path if needed
+const { connectToMongo } = require("./db");
+const app = express();
+const PORT = process.env.PORT || 3000;
+const cors = require("cors");
 
 // Connect to MongoDB directly
 connectToMongo();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(
+	cors({
+		origin: ["http://localhost:3000", "http://localhost:3001"],
+		methods: ["GET", "POST", "PUT", "DELETE"],
+		allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
+		credentials: true,
+	}),
+);
 
 const userRoutes = require("./routes/usersRoutes");
 
