@@ -1,7 +1,8 @@
-const db = require("../db");
+const { v4: uuidv4 } = require("uuid");
+const { connectToMongo, getDb } = require("../db"); // Adjust the path if needed
 const crypto = require("crypto");
 
-// Utility function to generate a new token
+// Utility function to generate a new token (using crypto, as in your original code)
 const generateToken = (length = 64) => {
 	return crypto.randomBytes(length).toString("hex");
 };
@@ -20,49 +21,6 @@ const calculateRefreshExpiration = () => {
 	return expiresAt;
 };
 
-// Function to retrieve the session by refresh token
-const getSessionByRefreshToken = async (refreshToken) => {
-	const result = await db.query(
-		"SELECT id, user_id, data FROM sessions WHERE data->>'refresh_token' = $1 AND data->>'is_valid' = 'true' AND (data->>'refresh_expires_at')::timestamptz > NOW() FOR UPDATE",
-		[refreshToken],
-	);
-	return result.rows;
-};
-
-// Function to insert a new session
-const createNewSession = async (
-	userId,
-	newAccessToken,
-	newRefreshToken,
-	clientType,
-	ipAddress,
-	userAgent,
-) => {
-	const now = new Date();
-	const expiresAt = calculateExpiration();
-	const refreshExpiresAt = calculateRefreshExpiration();
-
-	const sessionData = {
-		is_valid: true,
-		created_at: now.toISOString(),
-		expires_at: expiresAt.toISOString(),
-		refresh_expires_at: refreshExpiresAt.toISOString(),
-		ip_address: ipAddress,
-		user_agent: userAgent,
-		client_type: clientType,
-		access_token: newAccessToken,
-		refresh_token: newRefreshToken,
-	};
-
-	const result = await db.query(
-		"INSERT INTO sessions (user_id, data) VALUES ($1, $2) RETURNING id",
-		[userId, sessionData],
-	);
-
-	return result.rows[0].id;
-};
-
-// Main controller function to handle the refresh token request
 exports.refreshToken = async (req, res) => {
 	console.log("Received refresh token request");
 	// Extract refresh token from HTTP-only cookie
@@ -74,39 +32,50 @@ exports.refreshToken = async (req, res) => {
 	}
 
 	try {
-		// Retrieve session by refresh token
-		const sessionRows = await getSessionByRefreshToken(refreshToken);
-		if (sessionRows.length === 0) {
+		await connectToMongo();
+		const db = getDb();
+		const sessionsCollection = db.collection("sessions");
+		const usersCollection = db.collection("users"); //added users collection
+
+		// Retrieve session by refresh token,  and is_valid = true, and refresh_expires_at > NOW()
+		const session = await sessionsCollection.findOne({
+			refreshToken: refreshToken,
+			is_valid: true,
+			expiresAt: { $gt: new Date() }, // Check expiration
+		});
+
+		if (!session) {
 			console.error("Invalid, expired, or revoked refresh token");
 			return res.status(401).json({
 				message: "Invalid, expired, or revoked refresh token",
 			});
 		}
 
-		const session = sessionRows[0];
-		const user_id = session.user_id;
-		const sessionData = session.data;
+		const userId = session.userId;
 
 		// Generate new tokens
 		const newAccessToken = generateToken();
 		const newRefreshToken = generateToken();
 
-		// Create a new session
-		await createNewSession(
-			user_id,
-			newAccessToken,
-			newRefreshToken,
-			sessionData.client_type,
-			sessionData.ip_address,
-			sessionData.user_agent,
+		// Update the existing session with new tokens and expiration
+		const updatedSessionData = {
+			accessToken: newAccessToken,
+			refreshToken: newRefreshToken,
+			expiresAt: calculateExpiration(), // Update access token expiration
+			expiresAt: calculateRefreshExpiration(),
+		};
+
+		const result = await sessionsCollection.updateOne(
+			{ _id: session._id }, // Use the session's _id for updating
+			{ $set: updatedSessionData },
 		);
 
-		// Invalidate the old session (optional but recommended for security)
-		await db.query(
-			"UPDATE sessions SET data = jsonb_set(data, '{is_valid}', 'false') WHERE id = $1",
-			[session.id],
-		);
-
+		if (!result.modifiedCount) {
+			console.error("Failed to update session with new tokens");
+			return res
+				.status(500)
+				.json({ message: "Failed to refresh tokens" }); // Or a more specific error
+		}
 		// Set new tokens in cookies
 		res.cookie("_ax_13z", newAccessToken, {
 			httpOnly: true,
