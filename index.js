@@ -1,4 +1,8 @@
 const express = require("express");
+const { connectToMongo } = require("./db"); // Adjust path if needed
+
+// Connect to MongoDB directly
+connectToMongo();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
