@@ -43,7 +43,7 @@ const connectToMongo = async () => {
 				// Test the connection with a simple command
 				await client.db("admin").command({ ping: 1 });
 
-				db = client.db(); // or client.db("<your-db-name>") if needed
+				db = client.db("Innovdb"); // or client.db("<your-db-name>") if needed
 				console.log("Connected to MongoDB");
 				isConnecting = false;
 				resolve();
