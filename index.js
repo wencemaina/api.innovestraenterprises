@@ -15,6 +15,7 @@ app.use(
 		origin: [
 			"http://localhost:3000",
 			"http://localhost:3001",
+			"https://wencestudios.com",
 			"https://innov.wencestudios.com",
 		],
 		methods: ["GET", "POST", "PUT", "DELETE"],
