@@ -43,6 +43,10 @@ function setCookies(req, res, accessToken, refreshToken) {
 	const isProduction = process.env.NODE_ENV === "production";
 	const hostname = req.hostname || "localhost";
 
+	console.log(
+		`Request received from hostname: ${hostname}, isProduction: ${isProduction}`,
+	);
+
 	// Log cookie setting attempt for debugging
 	console.log(
 		`Setting cookies for hostname: ${hostname}, isProduction: ${isProduction}`,
