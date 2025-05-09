@@ -10,6 +10,17 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
+// Function to get device information (in a real system, you'd get more data from request)
+function getDeviceInfo(req) {
+	// For web client, you might use user agent, IP, fingerprint, etc.
+	// This is simplified for demonstration
+	return {
+		deviceId: req.headers["user-agent"] || "unknown-web-browser",
+		deviceType: "web",
+		lastActive: new Date(),
+	};
+}
+
 exports.login = async (req, res) => {
 	console.log("Login request received:", req.body);
 
@@ -67,31 +78,89 @@ exports.login = async (req, res) => {
 				.json({ message: "Invalid email or password" });
 		}
 
-		// Use userId from the user document instead of _id
+		// Use userId from the user document
 		const userId = user.userId;
-		const sessionId = uuidv4();
-		const { accessToken, refreshToken } = generateTokens();
+		const deviceInfo = getDeviceInfo(req);
 
-		const sessionData = {
+		// Check if an active session already exists for this user
+		const existingSession = await sessionsCollection.findOne({
 			userId: userId,
-			userType: userType,
-			accessToken: accessToken,
-			refreshToken: refreshToken,
-			sessionId: sessionId,
-			expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-			createdAt: new Date(),
-		};
+			isActive: true,
+		});
 
-		// Insert the session data into the sessions collection
-		try {
-			await sessionsCollection.insertOne(sessionData);
-			console.log("Session created successfully for user:", userId);
-		} catch (sessionError) {
-			console.error("Error creating session:", sessionError);
-			return res.status(500).json({
-				message: "Failed to create session",
-				error: sessionError.message,
-			});
+		let sessionId, accessToken, refreshToken;
+
+		if (existingSession) {
+			// Use existing session
+			console.log("Found existing session for user:", userId);
+			sessionId = existingSession.sessionId;
+			refreshToken = existingSession.refreshToken;
+
+			// Generate a new access token
+			accessToken = crypto.randomBytes(32).toString("hex");
+
+			// Check if this device is already registered
+			const deviceExists = existingSession.devices.some(
+				(device) => device.deviceId === deviceInfo.deviceId,
+			);
+
+			// Update the session with new device info or update existing device lastActive
+			if (deviceExists) {
+				// Update existing device's lastActive timestamp
+				await sessionsCollection.updateOne(
+					{
+						sessionId: sessionId,
+						"devices.deviceId": deviceInfo.deviceId,
+					},
+					{
+						$set: {
+							"devices.$.lastActive": new Date(),
+							lastActive: new Date(),
+						},
+					},
+				);
+			} else {
+				// Add this new device to the devices array
+				await sessionsCollection.updateOne(
+					{ sessionId: sessionId },
+					{
+						$push: { devices: deviceInfo },
+						$set: { lastActive: new Date() },
+					},
+				);
+			}
+		} else {
+			// Create a new session since none exists
+			console.log("Creating new session for user:", userId);
+			sessionId = uuidv4();
+			const tokens = generateTokens();
+			accessToken = tokens.accessToken;
+			refreshToken = tokens.refreshToken;
+
+			const sessionData = {
+				userId: userId,
+				userType: userType,
+				refreshToken: refreshToken,
+				accessToken: null, // Don't store access tokens in DB
+				isActive: true,
+				sessionId: sessionId,
+				devices: [deviceInfo],
+				expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+				createdAt: new Date(),
+				lastActive: new Date(),
+			};
+
+			// Insert the session data into the sessions collection
+			try {
+				await sessionsCollection.insertOne(sessionData);
+				console.log("Session created successfully for user:", userId);
+			} catch (sessionError) {
+				console.error("Error creating session:", sessionError);
+				return res.status(500).json({
+					message: "Failed to create session",
+					error: sessionError.message,
+				});
+			}
 		}
 
 		// Set cookies for production domain
@@ -110,7 +179,7 @@ exports.login = async (req, res) => {
 			sameSite: "None", //  None for cross-site
 			domain: ".wencestudios.com",
 			path: "/",
-			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - matches the session expiry
 		});
 
 		// Set cookies for localhost
@@ -129,7 +198,7 @@ exports.login = async (req, res) => {
 			sameSite: "Lax", //  Lax for localhost
 			domain: "localhost",
 			path: "/",
-			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 		});
 
 		// For debugging only - remove in production
@@ -157,3 +226,30 @@ exports.login = async (req, res) => {
 		});
 	}
 };
+
+/* Session example */
+
+/* {
+  _id: "unique-session-id",
+  userId: "affbebb9-815d-4956-b808-4dad1f7eb4a3",
+  userType: "employer",
+  refreshToken: "long-lived-refresh-token-stays-the-same-across-devices",
+  accessToken: null, // Don't store access tokens in DB
+  isActive: true,
+  devices: [
+    {
+      deviceId: "web-browser-fingerprint-123",
+      deviceType: "web",
+      lastActive: "2025-05-09T13:08:45.382+00:00"
+    },
+    {
+      deviceId: "mobile-device-id-456",
+      deviceType: "mobile",
+      lastActive: "2025-05-09T13:12:48.831+00:00"
+    }
+  ],
+  // Instead of multiple expiry dates, just one for the session
+  expiresAt: "2025-06-09T13:08:45.382+00:00", // Much longer (e.g., 30 days)
+  createdAt: "2025-05-09T13:08:45.382+00:00",
+  lastActive: "2025-05-09T13:12:48.831+00:00"
+} */
