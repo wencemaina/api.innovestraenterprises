@@ -1,42 +1,61 @@
-const db = require("../db");
+const { connectToMongo, getDb } = require("../db");
 
 exports.logout = async (req, res) => {
 	try {
-		// Extract the access token from cookies
-		const access_token = req.cookies?._ax_13z;
+		const accessToken = req.cookies?._ax_13z;
 
-		if (!access_token) {
+		if (!accessToken) {
 			return res
 				.status(400)
 				.json({ message: "Access token is missing or invalid" });
 		}
 
-		// Delete sessions where the access_token matches in the JSONB data
-		const deleteQuery = `
-            DELETE FROM admin.sessions 
-            WHERE data->>'access_token' = $1 
-            RETURNING id
-        `;
+		await connectToMongo();
+		const db = getDb();
+		const sessionsCollection = db.collection("sessions");
 
-		const result = await db.query(deleteQuery, [access_token]);
+		const result = await sessionsCollection.deleteOne({ accessToken });
 
-		if (result.rowCount === 0) {
-			// No sessions were found related to the provided token
+		if (result.deletedCount === 0) {
 			return res.status(404).json({ message: "Session not found" });
 		}
 
-		// Clear the access token cookie
+		// Clear cookies for localhost
 		res.clearCookie("_ax_13z", {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
+			sameSite: "Lax",
+			secure: false,
+			domain: "localhost",
+			path: "/",
+		});
+		res.clearCookie("_rf_9yp", {
+			httpOnly: true,
+			sameSite: "Lax",
+			secure: false,
+			domain: "localhost",
+			path: "/",
 		});
 
-		// Successfully deleted session and cleared the cookie
+		// Clear cookies for sitizenn.com
+		res.clearCookie("_ax_13z", {
+			httpOnly: true,
+			sameSite: "None",
+			secure: true,
+			domain: ".sitizenn.com",
+			path: "/",
+		});
+		res.clearCookie("_rf_9yp", {
+			httpOnly: true,
+			sameSite: "None",
+			secure: true,
+			domain: ".sitizenn.com",
+			path: "/",
+		});
+
+		console.log("✅ User logged out successfully");
 		res.status(200).json({ message: "Logout successful" });
-		console.log("User logged out successfully");
 	} catch (error) {
-		console.error("Error during logout:", error);
+		console.error("💥 Error during logout:", error);
 		res.status(500).json({ message: "An error occurred during logout" });
 	}
 };
