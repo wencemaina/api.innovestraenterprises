@@ -1,17 +1,17 @@
 const bcrypt = require("bcrypt");
 const { v4: uuidv4 } = require("uuid");
-const crypto = require("crypto"); // For generating random strings
-const { connectToMongo, getDb } = require("../db"); // Adjust the path if needed
+const crypto = require("crypto");
+const { connectToMongo, getDb } = require("../db");
 
 // Function to generate random tokens
 function generateTokens() {
-	const accessToken = crypto.randomBytes(32).toString("hex"); // 256 bits
-	const refreshToken = crypto.randomBytes(32).toString("hex"); // 256 bits
+	const accessToken = crypto.randomBytes(32).toString("hex");
+	const refreshToken = crypto.randomBytes(32).toString("hex");
 	return { accessToken, refreshToken };
 }
 
 exports.login = async (req, res) => {
-	console.log("Login request received:", req.body); // Log the request body for debugging
+	console.log("Login request received:", req.body);
 
 	try {
 		const { email, password, userType } = req.body;
@@ -24,19 +24,17 @@ exports.login = async (req, res) => {
 			typeof email !== "string" ||
 			!email.includes("@")
 		) {
-			return res
-				.status(400)
-				.json({
-					message: "Invalid email, password, or user type format",
-				});
+			return res.status(400).json({
+				message: "Invalid email, password, or user type format",
+			});
 		}
 
-		await connectToMongo(); // Ensure MongoDB connection
+		await connectToMongo();
 		const db = getDb();
 		const usersCollection = db.collection("users");
-		const sessionsCollection = db.collection("sessions"); // Get the sessions collection
+		const sessionsCollection = db.collection("sessions");
 
-		// Find the user by email - corrected path based on actual data structure
+		// Find the user by email
 		const user = await usersCollection.findOne({
 			"personalInfo.email": email.toLowerCase(),
 		});
@@ -69,17 +67,18 @@ exports.login = async (req, res) => {
 				.json({ message: "Invalid email or password" });
 		}
 
-		const userId = user._id; // Get the user's ID from the found document
-		const sessionId = uuidv4(); // Generate a unique session ID
-		const { accessToken, refreshToken } = generateTokens(); // Generate tokens
+		// Use userId from the user document instead of _id
+		const userId = user.userId;
+		const sessionId = uuidv4();
+		const { accessToken, refreshToken } = generateTokens();
 
 		const sessionData = {
 			userId: userId,
-			userType: userType, // Store the user type in the session
+			userType: userType,
 			accessToken: accessToken,
 			refreshToken: refreshToken,
-			sessionId: sessionId, // Include the sessionId in the database document
-			expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Session expires with refresh token (7 days)
+			sessionId: sessionId,
+			expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
 			createdAt: new Date(),
 		};
 
@@ -95,15 +94,11 @@ exports.login = async (req, res) => {
 			});
 		}
 
-		// Set cookies for production
+		// Set single set of cookies that work for both production and development
 		res.cookie("_ax_13z", accessToken, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
 			sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-			domain:
-				process.env.NODE_ENV === "production"
-					? ".sitizenn.com"
-					: "localhost",
 			path: "/",
 			maxAge: 12 * 60 * 60 * 1000, // 12 hours
 		});
@@ -112,17 +107,15 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
 			sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
-			domain:
-				process.env.NODE_ENV === "production"
-					? ".sitizenn.com"
-					: "localhost",
 			path: "/",
 			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 		});
 
-		// Log the tokens (for debugging - remove in production)
-		console.log("Access Token:", accessToken);
-		console.log("Refresh Token:", refreshToken);
+		// For debugging only - remove in production
+		if (process.env.NODE_ENV !== "production") {
+			console.log("Access Token:", accessToken);
+			console.log("Refresh Token:", refreshToken);
+		}
 
 		// Return user information
 		return res.status(200).json({
