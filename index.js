@@ -22,6 +22,8 @@ app.use(
 
 const userRoutes = require("./routes/usersRoutes");
 
+const authRoutes = require("./routes/authRoutes");
+
 // Middleware to parse JSON
 app.use(express.json());
 
@@ -32,6 +34,7 @@ app.get("/", (req, res) => {
 
 // Use the user routes
 app.use("/api/users", userRoutes);
+app.use("/api/auth", authRoutes);
 
 // Start server
 app.listen(PORT, () => {
