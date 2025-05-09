@@ -1,11 +1,10 @@
 const { MongoClient } = require("mongodb");
+require("dotenv").config(); // Load environment variables
 
-// Connection URI - You need to replace <password> with your actual password
-// If your password contains special characters, they should be URL encoded
-const uri =
-	"mongodb://root:iMcraQDyeIaK4GPtkqlx2kw1ESPTUNKKCpVrR1f8TkqIbs75HbR0N1u8ytXcImE5@152.53.241.234:5433/?directConnection=true";
+// Get MongoDB URI from environment variable
+const uri = process.env.MONGODB_URI;
 
-// Create a cached connection variable
+// Create cached connection variables
 let client;
 let db;
 let isConnecting = false;
@@ -34,16 +33,13 @@ const connectToMongo = async () => {
 
 		while (retries < maxRetries) {
 			try {
-				// Remove deprecated options useNewUrlParser and useUnifiedTopology
 				const options = {};
-
 				client = new MongoClient(uri, options);
 				await client.connect();
 
 				// Test the connection with a simple command
 				await client.db("admin").command({ ping: 1 });
-
-				db = client.db("Innovdb"); // or client.db("<your-db-name>") if needed
+				db = client.db("Innovdb");
 				console.log("Connected to MongoDB");
 				isConnecting = false;
 				resolve();
