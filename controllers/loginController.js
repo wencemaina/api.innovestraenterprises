@@ -10,9 +10,8 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Function to get device information (in a real system, you'd get more data from request)
+// Function to get device information
 function getDeviceInfo(req) {
-	// Create a more unique device fingerprint using multiple factors
 	const userAgent = req.headers["user-agent"] || "unknown";
 	const ipAddress =
 		req.headers["x-forwarded-for"] ||
@@ -20,7 +19,6 @@ function getDeviceInfo(req) {
 		"unknown";
 	const acceptLanguage = req.headers["accept-language"] || "unknown";
 
-	// Combine factors to create a more unique fingerprint
 	const deviceSignature = `${userAgent}|${ipAddress}|${acceptLanguage}`;
 	const deviceHash = crypto
 		.createHash("sha256")
@@ -32,11 +30,63 @@ function getDeviceInfo(req) {
 		deviceType: "web",
 		deviceDetails: {
 			userAgent: userAgent,
-			ip: ipAddress.split(",")[0].trim(), // Get first IP if behind proxy
+			ip: ipAddress.split(",")[0].trim(),
 			language: acceptLanguage,
 		},
 		lastActive: new Date(),
 	};
+}
+
+// Helper function to set cookies with proper environment detection
+function setCookies(req, res, accessToken, refreshToken) {
+	// Determine environment
+	const isProduction = process.env.NODE_ENV === "production";
+	const hostname = req.hostname || "localhost";
+
+	// Log cookie setting attempt for debugging
+	console.log(
+		`Setting cookies for hostname: ${hostname}, isProduction: ${isProduction}`,
+	);
+
+	// Determine domain based on environment
+	let domain;
+	if (isProduction) {
+		// Extract main domain from hostname (e.g., 'app.wencestudios.com' -> '.wencestudios.com')
+		const domainParts = hostname.split(".");
+		if (domainParts.length >= 2) {
+			domain = `.${domainParts.slice(-2).join(".")}`;
+		} else {
+			domain = hostname;
+		}
+	} else {
+		// For local development
+		domain = hostname;
+	}
+
+	// Cookie settings based on environment
+	const cookieSettings = {
+		httpOnly: true,
+		secure: isProduction, // true in production, false in development
+		sameSite: isProduction ? "None" : "Lax", // "None" for cross-origin in production, "Lax" for development
+		domain: domain,
+		path: "/",
+	};
+
+	// Set cookies
+	res.cookie("_ax_13z", accessToken, {
+		...cookieSettings,
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours
+	});
+
+	res.cookie("_rf_9yp", refreshToken, {
+		...cookieSettings,
+		maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+	});
+
+	// Log what we set for debugging
+	console.log(
+		`Cookies set with domain: ${domain}, secure: ${cookieSettings.secure}, sameSite: ${cookieSettings.sameSite}`,
+	);
 }
 
 exports.login = async (req, res) => {
@@ -183,42 +233,8 @@ exports.login = async (req, res) => {
 			}
 		}
 
-		// Set cookies for production domain
-		res.cookie("_ax_13z", accessToken, {
-			httpOnly: true,
-			secure: true, //  set to true.
-			sameSite: "None", //  None for cross-site
-			domain: ".wencestudios.com",
-			path: "/",
-			maxAge: 12 * 60 * 60 * 1000, // 12 hours
-		});
-		res.cookie("_rf_9yp", refreshToken, {
-			httpOnly: true,
-			secure: true, //  set to true
-			sameSite: "None", //  None for cross-site
-			domain: ".wencestudios.com",
-			path: "/",
-			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - matches the session expiry
-		});
-
-		// Set cookies for localhost
-		res.cookie("_ax_13z", accessToken, {
-			httpOnly: true,
-			secure: false, //  false for localhost
-			sameSite: "Lax", //  Lax for localhost
-			domain: "localhost",
-			path: "/",
-			maxAge: 12 * 60 * 60 * 1000, // 12 hours
-		});
-
-		res.cookie("_rf_9yp", refreshToken, {
-			httpOnly: true,
-			secure: false, //  false for localhost
-			sameSite: "Lax", //  Lax for localhost
-			domain: "localhost",
-			path: "/",
-			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-		});
+		// Set cookies based on environment
+		setCookies(req, res, accessToken, refreshToken);
 
 		// For debugging only - remove in production
 		if (process.env.NODE_ENV !== "production") {
@@ -245,7 +261,6 @@ exports.login = async (req, res) => {
 		});
 	}
 };
-
 /* Session example */
 
 /* {
