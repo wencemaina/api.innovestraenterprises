@@ -12,7 +12,11 @@ connectToMongo();
 
 app.use(
 	cors({
-		origin: ["http://localhost:3000", "http://localhost:3001"],
+		origin: [
+			"http://localhost:3000",
+			"http://localhost:3001",
+			"https://innov.wencestudios.com",
+		],
 		methods: ["GET", "POST", "PUT", "DELETE"],
 		allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
 		credentials: true, // This is essential for cookies
