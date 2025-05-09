@@ -1,29 +1,35 @@
-const { connectToMongo, getDb } = require("../db"); // Adjust the path if needed
+const { getDb } = require("../db"); // Adjust the path if needed
 
 exports.checkAuthStatus = async (req, res) => {
+	console.log("Received auth status check request");
+
 	// Extract tokens from cookies
 	const accessToken = req.cookies?._ax_13z;
 	const refreshToken = req.cookies?._rf_9yp;
 
-	console.log("Access token:", accessToken);
-	console.log("Refresh token:", refreshToken);
+	console.log("Access token present:", !!accessToken);
+	console.log("Refresh token present:", !!refreshToken);
 
 	if (!accessToken || !refreshToken) {
 		return res.status(401).json({ message: "Please log in to continue." });
 	}
 
 	try {
-		await connectToMongo();
 		const db = getDb();
 		const sessionsCollection = db.collection("sessions");
 
-		// Retrieve the session using both access and refresh tokens
+		// Simplified query: Focus only on tokens and expiration date
 		const session = await sessionsCollection.findOne({
 			accessToken: accessToken,
 			refreshToken: refreshToken,
-			is_valid: true, // Ensure the session is marked as valid
-			expiresAt: { $gt: new Date() }, // Check if the access token is expired
+			expiresAt: { $gt: new Date() }, // Check if the token is not expired
 		});
+
+		console.log("Session found:", !!session);
+		if (session) {
+			console.log("Session expires at:", session.expiresAt);
+			console.log("Current time:", new Date());
+		}
 
 		if (!session) {
 			return res
