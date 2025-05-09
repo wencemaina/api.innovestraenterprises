@@ -94,19 +94,40 @@ exports.login = async (req, res) => {
 			});
 		}
 
-		// Set single set of cookies that work for both production and development
+		// Set cookies for production domain
 		res.cookie("_ax_13z", accessToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+			secure: true, //  set to true.
+			sameSite: "None", //  None for cross-site
+			domain: ".sitizenn.com",
 			path: "/",
 			maxAge: 12 * 60 * 60 * 1000, // 12 hours
 		});
 
 		res.cookie("_rf_9yp", refreshToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === "production",
-			sameSite: process.env.NODE_ENV === "production" ? "None" : "Lax",
+			secure: true, //  set to true
+			sameSite: "None", //  None for cross-site
+			domain: ".sitizenn.com",
+			path: "/",
+			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+		});
+
+		// Set cookies for localhost
+		res.cookie("_ax_13z", accessToken, {
+			httpOnly: true,
+			secure: false, //  false for localhost
+			sameSite: "Lax", //  Lax for localhost
+			domain: "localhost",
+			path: "/",
+			maxAge: 12 * 60 * 60 * 1000, // 12 hours
+		});
+
+		res.cookie("_rf_9yp", refreshToken, {
+			httpOnly: true,
+			secure: false, //  false for localhost
+			sameSite: "Lax", //  Lax for localhost
+			domain: "localhost",
 			path: "/",
 			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 		});
