@@ -10,42 +10,19 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Helper function to set cookies with proper environment detection
+// Helper function to set cookies
 function setCookies(req, res, accessToken, refreshToken) {
 	// Determine environment
 	const isProduction = process.env.NODE_ENV === "production";
-	const hostname = req.hostname || "localhost";
 
-	console.log(
-		`Request received from hostname: ${hostname}, isProduction: ${isProduction}`,
-	);
-
-	// Log cookie setting attempt for debugging
-	console.log(
-		`Setting cookies for hostname: ${hostname}, isProduction: ${isProduction}`,
-	);
-
-	// Determine domain based on environment
-	let domain;
-	if (isProduction) {
-		// Extract main domain from hostname (e.g., 'app.wencestudios.com' -> '.wencestudios.com')
-		const domainParts = hostname.split(".");
-		if (domainParts.length >= 2) {
-			domain = `.${domainParts.slice(-2).join(".")}`;
-		} else {
-			domain = hostname;
-		}
-	} else {
-		// For local development
-		domain = hostname;
-	}
+	// Log environment for debugging
+	console.log(`Environment: ${isProduction ? "production" : "development"}`);
 
 	// Cookie settings based on environment
 	const cookieSettings = {
 		httpOnly: true,
 		secure: isProduction, // true in production, false in development
 		sameSite: isProduction ? "None" : "Lax", // "None" for cross-origin in production, "Lax" for development
-		domain: domain,
 		path: "/",
 	};
 
@@ -57,13 +34,8 @@ function setCookies(req, res, accessToken, refreshToken) {
 
 	res.cookie("_rf_9yp", refreshToken, {
 		...cookieSettings,
-		maxAge: 12 * 60 * 60 * 1000, // Changed to 12 hours as requested
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours for both tokens
 	});
-
-	// Log what we set for debugging
-	console.log(
-		`Cookies set with domain: ${domain}, secure: ${cookieSettings.secure}, sameSite: ${cookieSettings.sameSite}`,
-	);
 }
 
 exports.login = async (req, res) => {
@@ -97,15 +69,39 @@ exports.login = async (req, res) => {
 		const usersCollection = db.collection("users");
 		const sessionsCollection = db.collection("sessions");
 
+		// First check if user already has an active session
+		const existingSession = await sessionsCollection.findOne({
+			"personalInfo.email": email.toLowerCase(),
+			platform: platform,
+			isActive: true,
+		});
+
+		// If session exists, return it directly
+		if (existingSession) {
+			console.log(`Found existing ${platform} session for email:`, email);
+
+			// Set cookies based on existing session
+			setCookies(
+				req,
+				res,
+				existingSession.accessToken,
+				existingSession.refreshToken,
+			);
+
+			return res.status(200).json({
+				message: "Session resumed",
+				userId: existingSession.userId,
+				userType: existingSession.userType,
+				sessionId: existingSession.sessionId,
+				platform: platform,
+			});
+		}
+
+		// No existing session, proceed with normal login
 		// Find the user by email
 		const user = await usersCollection.findOne({
 			"personalInfo.email": email.toLowerCase(),
 		});
-
-		console.log(
-			"User search result:",
-			user ? "User found" : "User not found",
-		);
 
 		if (!user) {
 			return res.status(400).json({ message: "Email not registered" });
@@ -136,66 +132,39 @@ exports.login = async (req, res) => {
 		// Generate new tokens
 		const { accessToken, refreshToken } = generateTokens();
 
-		// Check if an active session already exists for this user and platform
-		const existingSession = await sessionsCollection.findOne({
+		// Create a new session
+		console.log(`Creating new ${platform} session for user:`, userId);
+		const sessionId = uuidv4();
+
+		const sessionData = {
 			userId: userId,
+			userType: userType,
+			accessToken: accessToken,
+			refreshToken: refreshToken,
 			platform: platform,
 			isActive: true,
-		});
+			sessionId: sessionId,
+			expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours
+			createdAt: new Date(),
+			lastActive: new Date(),
+		};
 
-		let sessionId;
-
-		if (existingSession) {
-			// Use existing session
-			console.log(`Found existing ${platform} session for user:`, userId);
-			sessionId = existingSession.sessionId;
-
-			// Update the session with new tokens
-			await sessionsCollection.updateOne(
-				{ sessionId: sessionId },
-				{
-					$set: {
-						lastActive: new Date(),
-						accessToken: accessToken,
-						refreshToken: refreshToken,
-					},
-				},
+		// Insert the session data into the sessions collection
+		try {
+			await sessionsCollection.insertOne(sessionData);
+			console.log(
+				`${platform} session created successfully for user:`,
+				userId,
 			);
-		} else {
-			// Create a new session since none exists for this platform
-			console.log(`Creating new ${platform} session for user:`, userId);
-			sessionId = uuidv4();
-
-			const sessionData = {
-				userId: userId,
-				userType: userType,
-				accessToken: accessToken,
-				refreshToken: refreshToken,
-				platform: platform, // New field: "web" or "mobile"
-				isActive: true,
-				sessionId: sessionId,
-				expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours
-				createdAt: new Date(),
-				lastActive: new Date(),
-			};
-
-			// Insert the session data into the sessions collection
-			try {
-				await sessionsCollection.insertOne(sessionData);
-				console.log(
-					`${platform} session created successfully for user:`,
-					userId,
-				);
-			} catch (sessionError) {
-				console.error("Error creating session:", sessionError);
-				return res.status(500).json({
-					message: "Failed to create session",
-					error: sessionError.message,
-				});
-			}
+		} catch (sessionError) {
+			console.error("Error creating session:", sessionError);
+			return res.status(500).json({
+				message: "Failed to create session",
+				error: sessionError.message,
+			});
 		}
 
-		// Set cookies based on environment
+		// Set cookies
 		setCookies(req, res, accessToken, refreshToken);
 
 		// For debugging only - remove in production
@@ -227,7 +196,6 @@ exports.login = async (req, res) => {
 
 /* New Session Schema Example:
 {
-  "_id": ObjectId("681e06a2967f4a13f39cc749"),
   "userId": "52d7dfeb-ceaf-47c7-aceb-070630f13082",
   "userType": "writer",
   "accessToken": "bfad33f2ba7c871282e14fdd2696de47a89a436f708fa7fa737f3b11fde1fb04",
@@ -235,8 +203,8 @@ exports.login = async (req, res) => {
   "platform": "web",  // "web" or "mobile"
   "isActive": true,
   "sessionId": "2704ad89-fa59-40d1-8520-35c5eebfea6a",
-  "expiresAt": "2025-05-10T01:44:02.664Z", // 12 hours from creation
-  "createdAt": "2025-05-09T13:44:02.664Z",
+  "expiresAt": "2025-05-09T22:44:02.664Z", // 12 hours from creation
+  "createdAt": "2025-05-09T10:44:02.664Z",
   "lastActive": "2025-05-09T14:21:45.806Z"
 }
 */
