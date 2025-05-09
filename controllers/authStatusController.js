@@ -2,15 +2,13 @@ const { getDb } = require("../db"); // Adjust the path if needed
 
 exports.checkAuthStatus = async (req, res) => {
 	console.log("Received auth status check request");
-
 	// Extract tokens from cookies
 	const accessToken = req.cookies?._ax_13z;
 	const refreshToken = req.cookies?._rf_9yp;
+	console.log("Access token:", accessToken);
+	console.log("Refresh token:", refreshToken);
 
-	console.log("Access token present:", !!accessToken);
-	console.log("Refresh token present:", !!refreshToken);
-
-	if (!accessToken || !refreshToken) {
+	if (!accessToken) {
 		return res.status(401).json({ message: "Please log in to continue." });
 	}
 
@@ -18,18 +16,12 @@ exports.checkAuthStatus = async (req, res) => {
 		const db = getDb();
 		const sessionsCollection = db.collection("sessions");
 
-		// Simplified query: Focus only on tokens and expiration date
+		// Retrieve the session using only the access token
 		const session = await sessionsCollection.findOne({
 			accessToken: accessToken,
-			refreshToken: refreshToken,
-			expiresAt: { $gt: new Date() }, // Check if the token is not expired
+			isActive: true, // Changed from is_valid to isActive to match your schema
+			// Removed expiry check as per your requirement
 		});
-
-		console.log("Session found:", !!session);
-		if (session) {
-			console.log("Session expires at:", session.expiresAt);
-			console.log("Current time:", new Date());
-		}
 
 		if (!session) {
 			return res
