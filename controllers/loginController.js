@@ -10,33 +10,6 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Function to get device information
-function getDeviceInfo(req) {
-	const userAgent = req.headers["user-agent"] || "unknown";
-	const ipAddress =
-		req.headers["x-forwarded-for"] ||
-		req.connection.remoteAddress ||
-		"unknown";
-	const acceptLanguage = req.headers["accept-language"] || "unknown";
-
-	const deviceSignature = `${userAgent}|${ipAddress}|${acceptLanguage}`;
-	const deviceHash = crypto
-		.createHash("sha256")
-		.update(deviceSignature)
-		.digest("hex");
-
-	return {
-		deviceId: deviceHash,
-		deviceType: "web",
-		deviceDetails: {
-			userAgent: userAgent,
-			ip: ipAddress.split(",")[0].trim(),
-			language: acceptLanguage,
-		},
-		lastActive: new Date(),
-	};
-}
-
 // Helper function to set cookies with proper environment detection
 function setCookies(req, res, accessToken, refreshToken) {
 	// Determine environment
@@ -84,7 +57,7 @@ function setCookies(req, res, accessToken, refreshToken) {
 
 	res.cookie("_rf_9yp", refreshToken, {
 		...cookieSettings,
-		maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+		maxAge: 12 * 60 * 60 * 1000, // Changed to 12 hours as requested
 	});
 
 	// Log what we set for debugging
@@ -97,7 +70,7 @@ exports.login = async (req, res) => {
 	console.log("Login request received:", req.body);
 
 	try {
-		const { email, password, userType } = req.body;
+		const { email, password, userType, platform = "web" } = req.body;
 
 		// Basic validation before hitting DB
 		if (
@@ -109,6 +82,13 @@ exports.login = async (req, res) => {
 		) {
 			return res.status(400).json({
 				message: "Invalid email, password, or user type format",
+			});
+		}
+
+		// Validate platform
+		if (!["web", "mobile"].includes(platform)) {
+			return res.status(400).json({
+				message: "Invalid platform. Must be 'web' or 'mobile'",
 			});
 		}
 
@@ -152,14 +132,14 @@ exports.login = async (req, res) => {
 
 		// Use userId from the user document
 		const userId = user.userId;
-		const deviceInfo = getDeviceInfo(req);
 
-		// Generate new tokens regardless of whether we're creating a new session or updating an existing one
+		// Generate new tokens
 		const { accessToken, refreshToken } = generateTokens();
 
-		// Check if an active session already exists for this user
+		// Check if an active session already exists for this user and platform
 		const existingSession = await sessionsCollection.findOne({
 			userId: userId,
+			platform: platform,
 			isActive: true,
 		});
 
@@ -167,48 +147,23 @@ exports.login = async (req, res) => {
 
 		if (existingSession) {
 			// Use existing session
-			console.log("Found existing session for user:", userId);
+			console.log(`Found existing ${platform} session for user:`, userId);
 			sessionId = existingSession.sessionId;
 
-			// Check if this device is already registered
-			const deviceExists = existingSession.devices.some(
-				(device) => device.deviceId === deviceInfo.deviceId,
+			// Update the session with new tokens
+			await sessionsCollection.updateOne(
+				{ sessionId: sessionId },
+				{
+					$set: {
+						lastActive: new Date(),
+						accessToken: accessToken,
+						refreshToken: refreshToken,
+					},
+				},
 			);
-
-			// Update the session with new tokens and device info
-			if (deviceExists) {
-				// Update existing device's lastActive timestamp and tokens
-				await sessionsCollection.updateOne(
-					{
-						sessionId: sessionId,
-						"devices.deviceId": deviceInfo.deviceId,
-					},
-					{
-						$set: {
-							"devices.$.lastActive": new Date(),
-							lastActive: new Date(),
-							accessToken: accessToken,
-							refreshToken: refreshToken,
-						},
-					},
-				);
-			} else {
-				// Add this new device to the devices array and update tokens
-				await sessionsCollection.updateOne(
-					{ sessionId: sessionId },
-					{
-						$push: { devices: deviceInfo },
-						$set: {
-							lastActive: new Date(),
-							accessToken: accessToken,
-							refreshToken: refreshToken,
-						},
-					},
-				);
-			}
 		} else {
-			// Create a new session since none exists
-			console.log("Creating new session for user:", userId);
+			// Create a new session since none exists for this platform
+			console.log(`Creating new ${platform} session for user:`, userId);
 			sessionId = uuidv4();
 
 			const sessionData = {
@@ -216,10 +171,10 @@ exports.login = async (req, res) => {
 				userType: userType,
 				accessToken: accessToken,
 				refreshToken: refreshToken,
+				platform: platform, // New field: "web" or "mobile"
 				isActive: true,
 				sessionId: sessionId,
-				devices: [deviceInfo],
-				expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+				expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000), // 12 hours
 				createdAt: new Date(),
 				lastActive: new Date(),
 			};
@@ -227,7 +182,10 @@ exports.login = async (req, res) => {
 			// Insert the session data into the sessions collection
 			try {
 				await sessionsCollection.insertOne(sessionData);
-				console.log("Session created successfully for user:", userId);
+				console.log(
+					`${platform} session created successfully for user:`,
+					userId,
+				);
 			} catch (sessionError) {
 				console.error("Error creating session:", sessionError);
 				return res.status(500).json({
@@ -252,6 +210,7 @@ exports.login = async (req, res) => {
 			userId: userId,
 			userType: userType,
 			sessionId: sessionId,
+			platform: platform,
 		});
 	} catch (error) {
 		console.error("Login initiation error:", error);
@@ -265,29 +224,19 @@ exports.login = async (req, res) => {
 		});
 	}
 };
-/* Session example */
 
-/* {
-  _id: "unique-session-id",
-  userId: "affbebb9-815d-4956-b808-4dad1f7eb4a3",
-  userType: "employer",
-  refreshToken: "long-lived-refresh-token-stays-the-same-across-devices",
-  accessToken: "", // Don't store access tokens in DB
-  isActive: true,
-  devices: [
-    {
-      deviceId: "web-browser-fingerprint-123",
-      deviceType: "web",
-      lastActive: "2025-05-09T13:08:45.382+00:00"
-    },
-    {
-      deviceId: "mobile-device-id-456",
-      deviceType: "mobile",
-      lastActive: "2025-05-09T13:12:48.831+00:00"
-    }
-  ],
-  // Instead of multiple expiry dates, just one for the session
-  expiresAt: "2025-06-09T13:08:45.382+00:00", // Much longer (e.g., 30 days)
-  createdAt: "2025-05-09T13:08:45.382+00:00",
-  lastActive: "2025-05-09T13:12:48.831+00:00"
-} */
+/* New Session Schema Example:
+{
+  "_id": ObjectId("681e06a2967f4a13f39cc749"),
+  "userId": "52d7dfeb-ceaf-47c7-aceb-070630f13082",
+  "userType": "writer",
+  "accessToken": "bfad33f2ba7c871282e14fdd2696de47a89a436f708fa7fa737f3b11fde1fb04",
+  "refreshToken": "027f2b5f0c4f663c2d7d69bcaf03fcf781a3f7d72fcf30383813339dcb4eb8e5",
+  "platform": "web",  // "web" or "mobile"
+  "isActive": true,
+  "sessionId": "2704ad89-fa59-40d1-8520-35c5eebfea6a",
+  "expiresAt": "2025-05-10T01:44:02.664Z", // 12 hours from creation
+  "createdAt": "2025-05-09T13:44:02.664Z",
+  "lastActive": "2025-05-09T14:21:45.806Z"
+}
+*/
