@@ -254,7 +254,7 @@ exports.login = async (req, res) => {
   userId: "affbebb9-815d-4956-b808-4dad1f7eb4a3",
   userType: "employer",
   refreshToken: "long-lived-refresh-token-stays-the-same-across-devices",
-  accessToken: null, // Don't store access tokens in DB
+  accessToken: "", // Don't store access tokens in DB
   isActive: true,
   devices: [
     {
