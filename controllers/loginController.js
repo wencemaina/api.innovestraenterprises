@@ -12,11 +12,29 @@ function generateTokens() {
 
 // Function to get device information (in a real system, you'd get more data from request)
 function getDeviceInfo(req) {
-	// For web client, you might use user agent, IP, fingerprint, etc.
-	// This is simplified for demonstration
+	// Create a more unique device fingerprint using multiple factors
+	const userAgent = req.headers["user-agent"] || "unknown";
+	const ipAddress =
+		req.headers["x-forwarded-for"] ||
+		req.connection.remoteAddress ||
+		"unknown";
+	const acceptLanguage = req.headers["accept-language"] || "unknown";
+
+	// Combine factors to create a more unique fingerprint
+	const deviceSignature = `${userAgent}|${ipAddress}|${acceptLanguage}`;
+	const deviceHash = crypto
+		.createHash("sha256")
+		.update(deviceSignature)
+		.digest("hex");
+
 	return {
-		deviceId: req.headers["user-agent"] || "unknown-web-browser",
+		deviceId: deviceHash,
 		deviceType: "web",
+		deviceDetails: {
+			userAgent: userAgent,
+			ip: ipAddress.split(",")[0].trim(), // Get first IP if behind proxy
+			language: acceptLanguage,
+		},
 		lastActive: new Date(),
 	};
 }
@@ -82,31 +100,30 @@ exports.login = async (req, res) => {
 		const userId = user.userId;
 		const deviceInfo = getDeviceInfo(req);
 
+		// Generate new tokens regardless of whether we're creating a new session or updating an existing one
+		const { accessToken, refreshToken } = generateTokens();
+
 		// Check if an active session already exists for this user
 		const existingSession = await sessionsCollection.findOne({
 			userId: userId,
 			isActive: true,
 		});
 
-		let sessionId, accessToken, refreshToken;
+		let sessionId;
 
 		if (existingSession) {
 			// Use existing session
 			console.log("Found existing session for user:", userId);
 			sessionId = existingSession.sessionId;
-			refreshToken = existingSession.refreshToken;
-
-			// Generate a new access token
-			accessToken = crypto.randomBytes(32).toString("hex");
 
 			// Check if this device is already registered
 			const deviceExists = existingSession.devices.some(
 				(device) => device.deviceId === deviceInfo.deviceId,
 			);
 
-			// Update the session with new device info or update existing device lastActive
+			// Update the session with new tokens and device info
 			if (deviceExists) {
-				// Update existing device's lastActive timestamp
+				// Update existing device's lastActive timestamp and tokens
 				await sessionsCollection.updateOne(
 					{
 						sessionId: sessionId,
@@ -116,16 +133,22 @@ exports.login = async (req, res) => {
 						$set: {
 							"devices.$.lastActive": new Date(),
 							lastActive: new Date(),
+							accessToken: accessToken,
+							refreshToken: refreshToken,
 						},
 					},
 				);
 			} else {
-				// Add this new device to the devices array
+				// Add this new device to the devices array and update tokens
 				await sessionsCollection.updateOne(
 					{ sessionId: sessionId },
 					{
 						$push: { devices: deviceInfo },
-						$set: { lastActive: new Date() },
+						$set: {
+							lastActive: new Date(),
+							accessToken: accessToken,
+							refreshToken: refreshToken,
+						},
 					},
 				);
 			}
@@ -133,15 +156,12 @@ exports.login = async (req, res) => {
 			// Create a new session since none exists
 			console.log("Creating new session for user:", userId);
 			sessionId = uuidv4();
-			const tokens = generateTokens();
-			accessToken = tokens.accessToken;
-			refreshToken = tokens.refreshToken;
 
 			const sessionData = {
 				userId: userId,
 				userType: userType,
+				accessToken: accessToken,
 				refreshToken: refreshToken,
-				accessToken: null, // Don't store access tokens in DB
 				isActive: true,
 				sessionId: sessionId,
 				devices: [deviceInfo],
