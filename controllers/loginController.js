@@ -99,7 +99,7 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: true, //  set to true.
 			sameSite: "None", //  None for cross-site
-			domain: ".sitizenn.com",
+			domain: "innov.wencestudios.com",
 			path: "/",
 			maxAge: 12 * 60 * 60 * 1000, // 12 hours
 		});
@@ -108,7 +108,7 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: true, //  set to true
 			sameSite: "None", //  None for cross-site
-			domain: ".sitizenn.com",
+			domain: "innov.wencestudios.com",
 			path: "/",
 			maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 		});
