@@ -201,7 +201,7 @@ exports.login = async (req, res) => {
 			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - matches the session expiry
 		});
 
-		/* 		// Set cookies for localhost
+		// Set cookies for localhost
 		res.cookie("_ax_13z", accessToken, {
 			httpOnly: true,
 			secure: false, //  false for localhost
@@ -218,7 +218,7 @@ exports.login = async (req, res) => {
 			domain: "localhost",
 			path: "/",
 			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-		}); */
+		});
 
 		// For debugging only - remove in production
 		if (process.env.NODE_ENV !== "production") {
