@@ -14,10 +14,8 @@ const calculateAccessExpiration = () => {
 
 exports.refreshToken = async (req, res) => {
 	console.log("🔄 Received refresh token request");
-
 	const refreshToken = req.cookies?._rf_9yp;
-	const deviceId = req.headers["x-device-id"] || "unknown-device";
-	const deviceType = req.headers["x-device-type"] || "web";
+	const platform = req.headers["x-device-type"] || "web";
 
 	if (!refreshToken) {
 		console.warn("⛔ No refresh token found in cookies");
@@ -47,48 +45,25 @@ exports.refreshToken = async (req, res) => {
 		const userType = session.userType;
 		console.log(`✅ Valid session found for user: ${userId} (${userType})`);
 
-		// Generate a new access token only (refresh token stays the same)
+		// Generate new access and refresh tokens
 		const newAccessToken = generateToken();
+		const newRefreshToken = generateToken();
 		const now = new Date();
+		const newExpiresAt = calculateAccessExpiration();
 
-		// Update the device's lastActive time or add it if it doesn't exist
-		const deviceExists = session.devices.some(
-			(device) => device.deviceId === deviceId,
-		);
-		let updateOperation;
-
-		if (deviceExists) {
-			// Update existing device's lastActive time
-			updateOperation = {
+		// Update the session with new tokens and last active time
+		const result = await sessionsCollection.updateOne(
+			{ refreshToken },
+			{
 				$set: {
+					accessToken: newAccessToken,
+					refreshToken: newRefreshToken,
 					lastActive: now,
-					"devices.$[device].lastActive": now,
+					expiresAt: newExpiresAt,
+					platform: platform, // Update platform if it changed
 				},
-			};
-		} else {
-			// Add new device to the devices array
-			updateOperation = {
-				$set: { lastActive: now },
-				$push: {
-					devices: {
-						deviceId,
-						deviceType,
-						lastActive: now,
-					},
-				},
-			};
-		}
-
-		const result = deviceExists
-			? await sessionsCollection.updateOne(
-					{ refreshToken, "devices.deviceId": deviceId },
-					updateOperation,
-					{ arrayFilters: [{ "device.deviceId": deviceId }] },
-			  )
-			: await sessionsCollection.updateOne(
-					{ refreshToken },
-					updateOperation,
-			  );
+			},
+		);
 
 		if (!result.matchedCount) {
 			console.error("⚠️ Failed to update session");
@@ -97,9 +72,7 @@ exports.refreshToken = async (req, res) => {
 				.json({ message: "Failed to refresh tokens" });
 		}
 
-		console.log(
-			"✅ Session updated with new access token and device activity",
-		);
+		console.log("✅ Session updated with new access and refresh tokens");
 
 		// Set access token cookie for localhost
 		res.cookie("_ax_13z", newAccessToken, {
@@ -112,7 +85,7 @@ exports.refreshToken = async (req, res) => {
 		});
 
 		// Set refresh token cookie for localhost
-		res.cookie("_rf_9yp", refreshToken, {
+		res.cookie("_rf_9yp", newRefreshToken, {
 			httpOnly: true,
 			path: "/",
 			sameSite: "Lax",
@@ -132,7 +105,7 @@ exports.refreshToken = async (req, res) => {
 		});
 
 		// Set refresh token cookie for wencestudios.com
-		res.cookie("_rf_9yp", refreshToken, {
+		res.cookie("_rf_9yp", newRefreshToken, {
 			httpOnly: true,
 			path: "/",
 			sameSite: "None",
@@ -142,7 +115,7 @@ exports.refreshToken = async (req, res) => {
 		});
 
 		return res.status(200).json({
-			message: "Access token refreshed successfully",
+			message: "Access and refresh tokens refreshed successfully",
 			userType, // Return the user type for the client to use
 		});
 	} catch (error) {
