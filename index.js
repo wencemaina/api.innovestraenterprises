@@ -4,6 +4,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const cors = require("cors");
 
+const cookieParser = require("cookie-parser");
+app.use(cookieParser());
+
 // Connect to MongoDB directly
 connectToMongo();
 
@@ -12,7 +15,8 @@ app.use(
 		origin: ["http://localhost:3000", "http://localhost:3001"],
 		methods: ["GET", "POST", "PUT", "DELETE"],
 		allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
-		credentials: true,
+		credentials: true, // This is essential for cookies
+		exposedHeaders: ["Set-Cookie"], // Add this line
 	}),
 );
 
