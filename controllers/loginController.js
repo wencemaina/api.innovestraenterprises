@@ -188,7 +188,7 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: true, //  set to true.
 			sameSite: "None", //  None for cross-site
-			domain: ".wencestudios.com",
+			domain: "innov.wencestudios.com",
 			path: "/",
 			maxAge: 12 * 60 * 60 * 1000, // 12 hours
 		});
@@ -197,7 +197,7 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: true, //  set to true
 			sameSite: "None", //  None for cross-site
-			domain: ".wencestudios.com",
+			domain: "innov.wencestudios.com",
 			path: "/",
 			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - matches the session expiry
 		});
