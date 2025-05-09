@@ -1,6 +1,7 @@
 const { connectToMongo, getDb } = require("../db");
 
 exports.logout = async (req, res) => {
+	console.log("🔒 Logout request received");
 	try {
 		const accessToken = req.cookies?._ax_13z;
 
