@@ -188,21 +188,20 @@ exports.login = async (req, res) => {
 			httpOnly: true,
 			secure: true, //  set to true.
 			sameSite: "None", //  None for cross-site
-			domain: "innov.wencestudios.com",
+			domain: ".wencestudios.com",
 			path: "/",
 			maxAge: 12 * 60 * 60 * 1000, // 12 hours
 		});
-
 		res.cookie("_rf_9yp", refreshToken, {
 			httpOnly: true,
 			secure: true, //  set to true
 			sameSite: "None", //  None for cross-site
-			domain: "innov.wencestudios.com",
+			domain: ".wencestudios.com",
 			path: "/",
 			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days - matches the session expiry
 		});
 
-		// Set cookies for localhost
+		/* 		// Set cookies for localhost
 		res.cookie("_ax_13z", accessToken, {
 			httpOnly: true,
 			secure: false, //  false for localhost
@@ -219,7 +218,7 @@ exports.login = async (req, res) => {
 			domain: "localhost",
 			path: "/",
 			maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-		});
+		}); */
 
 		// For debugging only - remove in production
 		if (process.env.NODE_ENV !== "production") {
