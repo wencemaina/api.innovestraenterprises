@@ -9,7 +9,7 @@ function generateTokens() {
 	const refreshToken = crypto.randomBytes(32).toString("hex");
 	return { accessToken, refreshToken };
 }
-
+/* 
 function setCookies(req, res, accessToken, refreshToken) {
 	// Get the host from the request (mostly for logging purposes)
 	const host = req.get("host") || "";
@@ -52,6 +52,33 @@ function setCookies(req, res, accessToken, refreshToken) {
 		"Cookies set with domain:",
 		cookieSettings.domain || "no domain set",
 	);
+} */
+
+function setCookies(req, res, accessToken, refreshToken) {
+	// Always use secure settings for production
+	const cookieSettings = {
+		httpOnly: true,
+		secure: true, // HTTPS is required
+		sameSite: "None", // for cross-site requests
+		path: "/",
+		domain: "innov.wencestudios.com", // restrict to this specific subdomain
+	};
+
+	console.log("Setting cookies with:", cookieSettings);
+
+	// Set access token cookie
+	res.cookie("_ax_13z", accessToken, {
+		...cookieSettings,
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours
+	});
+
+	// Set refresh token cookie
+	res.cookie("_rf_9yp", refreshToken, {
+		...cookieSettings,
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours
+	});
+
+	console.log("Cookies successfully set for innov.wencestudios.com");
 }
 
 exports.login = async (req, res) => {
