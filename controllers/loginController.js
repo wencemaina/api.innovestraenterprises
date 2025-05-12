@@ -13,12 +13,9 @@ function generateTokens() {
 // Helper function to set cookies based on domain
 // Helper function to set cookies with improved domain handling
 function setCookies(req, res, accessToken, refreshToken) {
-	// Get the hostname and origin for better domain handling
+	// Get the hostname and origin for domain handling
 	const host = req.get("host") || "";
 	const origin = req.get("origin") || "";
-
-	console.log(`Request host: ${host}`);
-	console.log(`Request origin: ${origin}`);
 
 	// Determine if we're on localhost
 	const isLocalhost =
@@ -27,55 +24,24 @@ function setCookies(req, res, accessToken, refreshToken) {
 		origin.includes("localhost") ||
 		origin.includes("127.0.0.1");
 
-	console.log(`Is localhost: ${isLocalhost}`);
-
 	// Base cookie settings
 	const cookieSettings = {
 		httpOnly: true,
 		secure: !isLocalhost, // true in production, false on localhost
-		sameSite: isLocalhost ? "Lax" : "None", // "None" for cross-origin in production
+		sameSite: isLocalhost ? "Lax" : "None", // "Lax" for localhost, "None" for cross-origin
 		path: "/",
 	};
 
-	// Domain handling for production
-	if (!isLocalhost) {
-		// Extract the base domain for production
-		// This is critical for cross-subdomain cookie sharing
-		let domainForCookie;
-
-		try {
-			// Parse the domain from either host or origin
-			const urlString = origin || `http://${host}`;
-			const url = new URL(urlString);
-
-			// Get the hostname (without port)
-			const hostname = url.hostname;
-
-			// Extract base domain for cookies
-			// This allows sharing across subdomains
-			const parts = hostname.split(".");
-
-			if (parts.length > 2) {
-				// For subdomains like api.example.com, use .example.com
-				// This allows cookies to be shared with app.example.com
-				domainForCookie = "." + parts.slice(-2).join(".");
-			} else {
-				// For apex domains like example.com
-				domainForCookie = hostname;
-			}
-
-			// Add domain setting
-			cookieSettings.domain = domainForCookie;
-		} catch (error) {
-			// Fallback to host-based domain
-			console.error("Error parsing domain:", error);
-			const domainParts = host.split(":")[0].split(".");
-			if (domainParts.length >= 2) {
-				cookieSettings.domain = domainParts.slice(-2).join(".");
-			}
-		}
+	// Set domain based on environment
+	if (isLocalhost) {
+		// No domain for localhost to ensure cookie works
+		delete cookieSettings.domain;
+	} else {
+		// Use the base domain for production
+		cookieSettings.domain = ".innovestraenterprises.co.ke";
 	}
 
+	console.log("Is localhost:", isLocalhost);
 	console.log("Cookie settings:", JSON.stringify(cookieSettings));
 
 	// Set cookies
