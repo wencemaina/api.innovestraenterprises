@@ -10,32 +10,29 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Helper function to set cookies based on domain
 function setCookies(req, res, accessToken, refreshToken) {
-	// Get the domain from the request
-	const domain = req.get("host") || "";
+	// Get the host from the request (mostly for logging purposes)
+	const host = req.get("host") || "";
 
-	// Determine if we're on localhost based on domain
+	// Determine if we're on localhost
 	const isLocalhost =
-		domain.includes("localhost") || domain.includes("127.0.0.1");
+		host.includes("localhost") || host.includes("127.0.0.1");
 
-	// Log domain and cookie settings for debugging
-	console.log(`Domain: ${domain}`);
+	console.log(`Request host: ${host}`);
 	console.log(`Is localhost: ${isLocalhost}`);
 
-	// Cookie settings based on domain
+	// Base cookie settings
 	const cookieSettings = {
 		httpOnly: true,
 		secure: !isLocalhost, // true in production, false on localhost
-		sameSite: isLocalhost ? "Lax" : "None", // "None" for cross-origin in production, "Lax" for localhost
+		sameSite: isLocalhost ? "Lax" : "None", // "None" for cross-origin in production
 		path: "/",
 	};
 
-	// Add domain setting for non-localhost environments
+	// Set domain explicitly for production environments
 	if (!isLocalhost) {
-		// Extract the domain without port if needed
-		const domainForCookie = domain.split(":")[0];
-		cookieSettings.domain = domainForCookie;
+		// Hardcode your domain with a leading dot to allow sharing across subdomains
+		cookieSettings.domain = ".wencestudios.com";
 	}
 
 	console.log("Cookie settings:", JSON.stringify(cookieSettings));
@@ -48,10 +45,13 @@ function setCookies(req, res, accessToken, refreshToken) {
 
 	res.cookie("_rf_9yp", refreshToken, {
 		...cookieSettings,
-		maxAge: 12 * 60 * 60 * 1000, // 12 hours for both tokens
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours
 	});
 
-	console.log("Cookies set successfully");
+	console.log(
+		"Cookies set with domain:",
+		cookieSettings.domain || "no domain set",
+	);
 }
 
 exports.login = async (req, res) => {
