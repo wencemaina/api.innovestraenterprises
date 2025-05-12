@@ -1,13 +1,5 @@
 const { getDb } = require("../db");
 
-/**
-
- * Enhanced controller to verify authentication status from various sources
-
- * Checks both cookies and Authorization header to maximize compatibility
-
- */
-
 exports.checkAuthStatus = async (req, res) => {
 	console.log("---------- AUTH STATUS CHECK ----------");
 

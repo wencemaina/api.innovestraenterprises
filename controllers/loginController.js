@@ -10,21 +10,35 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Helper function to set cookies
+// Helper function to set cookies based on domain
 function setCookies(req, res, accessToken, refreshToken) {
-	// Determine environment
-	const isProduction = process.env.NODE_ENV === "production";
+	// Get the domain from the request
+	const domain = req.get("host") || "";
 
-	// Log environment for debugging
-	console.log(`Environment: ${isProduction ? "production" : "development"}`);
+	// Determine if we're on localhost based on domain
+	const isLocalhost =
+		domain.includes("localhost") || domain.includes("127.0.0.1");
 
-	// Cookie settings based on environment
+	// Log domain and cookie settings for debugging
+	console.log(`Domain: ${domain}`);
+	console.log(`Is localhost: ${isLocalhost}`);
+
+	// Cookie settings based on domain
 	const cookieSettings = {
 		httpOnly: true,
-		secure: isProduction, // true in production, false in development
-		sameSite: isProduction ? "None" : "Lax", // "None" for cross-origin in production, "Lax" for development
+		secure: !isLocalhost, // true in production, false on localhost
+		sameSite: isLocalhost ? "Lax" : "None", // "None" for cross-origin in production, "Lax" for localhost
 		path: "/",
 	};
+
+	// Add domain setting for non-localhost environments
+	if (!isLocalhost) {
+		// Extract the domain without port if needed
+		const domainForCookie = domain.split(":")[0];
+		cookieSettings.domain = domainForCookie;
+	}
+
+	console.log("Cookie settings:", JSON.stringify(cookieSettings));
 
 	// Set cookies
 	res.cookie("_ax_13z", accessToken, {
@@ -36,6 +50,8 @@ function setCookies(req, res, accessToken, refreshToken) {
 		...cookieSettings,
 		maxAge: 12 * 60 * 60 * 1000, // 12 hours for both tokens
 	});
+
+	console.log("Cookies set successfully");
 }
 
 exports.login = async (req, res) => {
@@ -167,12 +183,6 @@ exports.login = async (req, res) => {
 		// Set cookies
 		setCookies(req, res, accessToken, refreshToken);
 
-		// For debugging only - remove in production
-		if (process.env.NODE_ENV !== "production") {
-			console.log("Access Token:", accessToken);
-			console.log("Refresh Token:", refreshToken);
-		}
-
 		// Return user information
 		return res.status(200).json({
 			message: "Authentication successful",
@@ -182,29 +192,14 @@ exports.login = async (req, res) => {
 			platform: platform,
 		});
 	} catch (error) {
+		// Always log the error regardless of environment
 		console.error("Login initiation error:", error);
+
+		// Return error details regardless of environment
 		return res.status(500).json({
 			message: "Internal server error",
-			error:
-				process.env.NODE_ENV === "production"
-					? "Internal server error"
-					: error.toString(),
-			stack: process.env.NODE_ENV === "production" ? null : error.stack,
+			error: error.toString(),
+			stack: error.stack,
 		});
 	}
 };
-
-/* New Session Schema Example:
-{
-  "userId": "52d7dfeb-ceaf-47c7-aceb-070630f13082",
-  "userType": "writer",
-  "accessToken": "bfad33f2ba7c871282e14fdd2696de47a89a436f708fa7fa737f3b11fde1fb04",
-  "refreshToken": "027f2b5f0c4f663c2d7d69bcaf03fcf781a3f7d72fcf30383813339dcb4eb8e5",
-  "platform": "web",  // "web" or "mobile"
-  "isActive": true,
-  "sessionId": "2704ad89-fa59-40d1-8520-35c5eebfea6a",
-  "expiresAt": "2025-05-09T22:44:02.664Z", // 12 hours from creation
-  "createdAt": "2025-05-09T10:44:02.664Z",
-  "lastActive": "2025-05-09T14:21:45.806Z"
-}
-*/
