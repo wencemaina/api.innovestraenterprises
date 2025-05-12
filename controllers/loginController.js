@@ -9,16 +9,24 @@ function generateTokens() {
 	const refreshToken = crypto.randomBytes(32).toString("hex");
 	return { accessToken, refreshToken };
 }
-/* 
+
+// Helper function to set cookies based on domain
+// Helper function to set cookies with improved domain handling
 function setCookies(req, res, accessToken, refreshToken) {
-	// Get the host from the request (mostly for logging purposes)
+	// Get the hostname and origin for better domain handling
 	const host = req.get("host") || "";
+	const origin = req.get("origin") || "";
+
+	console.log(`Request host: ${host}`);
+	console.log(`Request origin: ${origin}`);
 
 	// Determine if we're on localhost
 	const isLocalhost =
-		host.includes("localhost") || host.includes("127.0.0.1");
+		host.includes("localhost") ||
+		host.includes("127.0.0.1") ||
+		origin.includes("localhost") ||
+		origin.includes("127.0.0.1");
 
-	console.log(`Request host: ${host}`);
 	console.log(`Is localhost: ${isLocalhost}`);
 
 	// Base cookie settings
@@ -29,10 +37,43 @@ function setCookies(req, res, accessToken, refreshToken) {
 		path: "/",
 	};
 
-	// Set domain explicitly for production environments
+	// Domain handling for production
 	if (!isLocalhost) {
-		// Hardcode your domain with a leading dot to allow sharing across subdomains
-		cookieSettings.domain = ".wencestudios.com";
+		// Extract the base domain for production
+		// This is critical for cross-subdomain cookie sharing
+		let domainForCookie;
+
+		try {
+			// Parse the domain from either host or origin
+			const urlString = origin || `http://${host}`;
+			const url = new URL(urlString);
+
+			// Get the hostname (without port)
+			const hostname = url.hostname;
+
+			// Extract base domain for cookies
+			// This allows sharing across subdomains
+			const parts = hostname.split(".");
+
+			if (parts.length > 2) {
+				// For subdomains like api.example.com, use .example.com
+				// This allows cookies to be shared with app.example.com
+				domainForCookie = "." + parts.slice(-2).join(".");
+			} else {
+				// For apex domains like example.com
+				domainForCookie = hostname;
+			}
+
+			// Add domain setting
+			cookieSettings.domain = domainForCookie;
+		} catch (error) {
+			// Fallback to host-based domain
+			console.error("Error parsing domain:", error);
+			const domainParts = host.split(":")[0].split(".");
+			if (domainParts.length >= 2) {
+				cookieSettings.domain = domainParts.slice(-2).join(".");
+			}
+		}
 	}
 
 	console.log("Cookie settings:", JSON.stringify(cookieSettings));
@@ -52,33 +93,6 @@ function setCookies(req, res, accessToken, refreshToken) {
 		"Cookies set with domain:",
 		cookieSettings.domain || "no domain set",
 	);
-} */
-
-function setCookies(req, res, accessToken, refreshToken) {
-	// Always use secure settings for production
-	const cookieSettings = {
-		httpOnly: true,
-		secure: true, // HTTPS is required
-		sameSite: "None", // for cross-site requests
-		path: "/",
-		domain: "innov.wencestudios.com", // restrict to this specific subdomain
-	};
-
-	console.log("Setting cookies with:", cookieSettings);
-
-	// Set access token cookie
-	res.cookie("_ax_13z", accessToken, {
-		...cookieSettings,
-		maxAge: 12 * 60 * 60 * 1000, // 12 hours
-	});
-
-	// Set refresh token cookie
-	res.cookie("_rf_9yp", refreshToken, {
-		...cookieSettings,
-		maxAge: 12 * 60 * 60 * 1000, // 12 hours
-	});
-
-	console.log("Cookies successfully set for innov.wencestudios.com");
 }
 
 exports.login = async (req, res) => {
