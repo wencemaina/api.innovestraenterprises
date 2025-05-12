@@ -15,13 +15,17 @@ app.use(
 		origin: [
 			"http://localhost:3000",
 			"http://localhost:3001",
-			"https://wencestudios.com",
-			"https://innov.wencestudios.com",
+
+			"https://innovestraenterprises.co.ke",
+			"http://innovestraenterprises.co.ke",
+			"https://www.innovestraenterprises.co.ke",
+			"http://www.innovestraenterprises.co.ke",
+			"https://api.innovestraenterprises.co.ke",
 		],
 		methods: ["GET", "POST", "PUT", "DELETE"],
 		allowedHeaders: ["Content-Type", "Authorization", "X-Refresh-Token"],
-		credentials: true, // This is essential for cookies
-		exposedHeaders: ["Set-Cookie"], // Add this line
+		credentials: true,
+		exposedHeaders: ["Set-Cookie"],
 	}),
 );
 
