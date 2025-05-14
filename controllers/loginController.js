@@ -10,8 +10,6 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-// Helper function to set cookies based on domain
-// Helper function to set cookies with improved domain handling
 function setCookies(req, res, accessToken, refreshToken) {
 	// Get the hostname and origin for domain handling
 	const host = req.get("host") || "";
@@ -62,10 +60,11 @@ function setCookies(req, res, accessToken, refreshToken) {
 }
 
 exports.login = async (req, res) => {
-	console.log("Login request received:", req.body);
+	console.log("Web login request received:", req.body);
 
 	try {
-		const { email, password, userType, platform = "web" } = req.body;
+		const { email, password, userType } = req.body;
+		const platform = "web"; // This controller is always for web logins
 
 		// Basic validation before hitting DB
 		if (
@@ -75,15 +74,9 @@ exports.login = async (req, res) => {
 			typeof email !== "string" ||
 			!email.includes("@")
 		) {
+			console.log("Login validation failed for email:", email);
 			return res.status(400).json({
 				message: "Invalid email, password, or user type format",
-			});
-		}
-
-		// Validate platform
-		if (!["web", "mobile"].includes(platform)) {
-			return res.status(400).json({
-				message: "Invalid platform. Must be 'web' or 'mobile'",
 			});
 		}
 
@@ -92,46 +85,21 @@ exports.login = async (req, res) => {
 		const usersCollection = db.collection("users");
 		const sessionsCollection = db.collection("sessions");
 
-		// First check if user already has an active session
-		const existingSession = await sessionsCollection.findOne({
-			"personalInfo.email": email.toLowerCase(),
-			platform: platform,
-			isActive: true,
-		});
-
-		// If session exists, return it directly
-		if (existingSession) {
-			console.log(`Found existing ${platform} session for email:`, email);
-
-			// Set cookies based on existing session
-			setCookies(
-				req,
-				res,
-				existingSession.accessToken,
-				existingSession.refreshToken,
-			);
-
-			return res.status(200).json({
-				message: "Session resumed",
-				userId: existingSession.userId,
-				userType: existingSession.userType,
-				sessionId: existingSession.sessionId,
-				platform: platform,
-			});
-		}
-
-		// No existing session, proceed with normal login
-		// Find the user by email
+		// Find the user by email first to validate credentials
 		const user = await usersCollection.findOne({
 			"personalInfo.email": email.toLowerCase(),
 		});
 
 		if (!user) {
+			console.log(`[WEB LOGIN] Email not registered: ${email}`);
 			return res.status(400).json({ message: "Email not registered" });
 		}
 
 		// Verify user type matches
 		if (user.userType !== userType) {
+			console.log(
+				`[WEB LOGIN] Invalid user type for ${email}: got ${userType}, expected ${user.userType}`,
+			);
 			return res
 				.status(401)
 				.json({ message: "Invalid user type for this account" });
@@ -144,24 +112,53 @@ exports.login = async (req, res) => {
 		);
 
 		if (!passwordMatch) {
+			console.log(`[WEB LOGIN] Invalid password for ${email}`);
 			return res
 				.status(401)
 				.json({ message: "Invalid email or password" });
 		}
 
+		console.log(`[WEB LOGIN] User authenticated successfully: ${email}`);
 		// Use userId from the user document
 		const userId = user.userId;
 
-		// Generate new tokens
-		const { accessToken, refreshToken } = generateTokens();
+		// Check if user already has ANY active session
+		const existingSessions = await sessionsCollection
+			.find({
+				userId: userId,
+				isActive: true,
+			})
+			.toArray();
+
+		// Delete any existing active sessions for this user
+		if (existingSessions.length > 0) {
+			console.log(
+				`[WEB LOGIN] Found ${existingSessions.length} existing sessions for user: ${userId} (${email}). Deleting them.`,
+			);
+
+			await sessionsCollection.deleteMany({
+				userId: userId,
+				isActive: true,
+			});
+
+			console.log(
+				`[WEB LOGIN] Deleted existing sessions for user: ${userId}`,
+			);
+		}
 
 		// Create a new session
-		console.log(`Creating new ${platform} session for user:`, userId);
+		console.log(
+			`[WEB LOGIN] Creating new session for user: ${userId} (${email})`,
+		);
+
+		// Generate new tokens
+		const { accessToken, refreshToken } = generateTokens();
 		const sessionId = uuidv4();
 
 		const sessionData = {
 			userId: userId,
 			userType: userType,
+			email: email.toLowerCase(), // Store email directly in the session object
 			accessToken: accessToken,
 			refreshToken: refreshToken,
 			platform: platform,
@@ -176,11 +173,10 @@ exports.login = async (req, res) => {
 		try {
 			await sessionsCollection.insertOne(sessionData);
 			console.log(
-				`${platform} session created successfully for user:`,
-				userId,
+				`[WEB LOGIN] Session created successfully: ${sessionId} for user: ${userId}`,
 			);
 		} catch (sessionError) {
-			console.error("Error creating session:", sessionError);
+			console.error("[WEB LOGIN] Error creating session:", sessionError);
 			return res.status(500).json({
 				message: "Failed to create session",
 				error: sessionError.message,
@@ -189,6 +185,7 @@ exports.login = async (req, res) => {
 
 		// Set cookies
 		setCookies(req, res, accessToken, refreshToken);
+		console.log(`[WEB LOGIN] Cookies set for user: ${userId}`);
 
 		// Return user information
 		return res.status(200).json({
@@ -200,7 +197,7 @@ exports.login = async (req, res) => {
 		});
 	} catch (error) {
 		// Always log the error regardless of environment
-		console.error("Login initiation error:", error);
+		console.error("[WEB LOGIN] Login error:", error);
 
 		// Return error details regardless of environment
 		return res.status(500).json({
