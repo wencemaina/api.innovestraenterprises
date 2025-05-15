@@ -10,7 +10,7 @@ function generateTokens() {
 	return { accessToken, refreshToken };
 }
 
-function setCookies(req, res, accessToken, refreshToken) {
+function setCookies(req, res, accessToken, refreshToken, userId) {
 	// Get the hostname and origin for domain handling
 	const host = req.get("host") || "";
 	const origin = req.get("origin") || "";
@@ -49,6 +49,12 @@ function setCookies(req, res, accessToken, refreshToken) {
 	});
 
 	res.cookie("_rf_9yp", refreshToken, {
+		...cookieSettings,
+		maxAge: 12 * 60 * 60 * 1000, // 12 hours
+	});
+
+	// Add userId cookie with obfuscated name "as-YwAsmAN"
+	res.cookie("YwAsmAN", userId, {
 		...cookieSettings,
 		maxAge: 12 * 60 * 60 * 1000, // 12 hours
 	});
@@ -183,8 +189,8 @@ exports.login = async (req, res) => {
 			});
 		}
 
-		// Set cookies
-		setCookies(req, res, accessToken, refreshToken);
+		// Set cookies with userId
+		setCookies(req, res, accessToken, refreshToken, userId);
 		console.log(`[WEB LOGIN] Cookies set for user: ${userId}`);
 
 		// Return user information
