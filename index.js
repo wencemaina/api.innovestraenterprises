@@ -4,8 +4,13 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const cors = require("cors");
 
+const multer = require("multer");
+
+app.use(express.json());
+
 const cookieParser = require("cookie-parser");
 app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
 
 // Connect to MongoDB directly
 connectToMongo();
@@ -15,7 +20,6 @@ app.use(
 		origin: [
 			"http://localhost:3000",
 			"http://localhost:3001",
-
 			"https://innovestraenterprises.co.ke",
 			"http://innovestraenterprises.co.ke",
 			"https://www.innovestraenterprises.co.ke",
@@ -32,6 +36,7 @@ app.use(
 const userRoutes = require("./routes/usersRoutes");
 
 const authRoutes = require("./routes/authRoutes");
+const jobRoutes = require("./routes/jobRoutes");
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -44,6 +49,7 @@ app.get("/", (req, res) => {
 // Use the user routes
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/jobs", jobRoutes);
 
 // Start server
 app.listen(PORT, () => {
