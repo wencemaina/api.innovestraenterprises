@@ -32,9 +32,9 @@ exports.getEmployerJobs = async (req, res) => {
 				.json({ message: "No jobs found for this employer" });
 		}
 
-		// Map and format the jobs
+		// Map and format the jobs using the actual job "id" (not _id)
 		const jobs = jobsData.map((job) => ({
-			id: job._id.toString(),
+			id: job.id, // keep this as-is
 			title: job.title,
 			description: job.description,
 			client: job.client,
