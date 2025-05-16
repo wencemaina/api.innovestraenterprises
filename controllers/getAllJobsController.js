@@ -20,7 +20,7 @@ exports.getAllJobs = async (req, res) => {
 
 		// Map and format the jobs
 		const jobs = jobsData.map((job) => ({
-			id: job._id.toString(),
+			id: job.id, // ✅ use the custom job ID
 			title: job.title,
 			description: job.description,
 			client: job.client,
