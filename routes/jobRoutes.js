@@ -8,10 +8,15 @@ const { getAllJobs } = require("../controllers/getAllJobsController");
 
 const { getEmployerJobs } = require("../controllers/getEmployerJobsController");
 
+const {
+	getAllWriterJobs,
+} = require("../controllers/getAllWriterJobsController");
 // Apply the multer middleware directly in the route
 router.post("/create/new-job", upload.any(), createJob);
 
 router.get("/all", getAllJobs);
 
 router.get("/employer-jobs", getEmployerJobs);
+
+router.get("/all-writer-jobs", getAllWriterJobs);
 module.exports = router;
