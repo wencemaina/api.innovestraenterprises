@@ -12,10 +12,10 @@ exports.getAllWriterJobs = async (req, res) => {
 			return res.status(401).json({ error: "User not authenticated" });
 		}
 
-		// Find all jobs where assignedTo matches the writerId
+		// Find all jobs where assignment.writerId matches the writerId
 		const jobs = await db
 			.collection("jobs")
-			.find({ assignedTo: writerId })
+			.find({ "assignment.writerId": writerId })
 			.toArray();
 
 		res.status(200).json({ jobs });
