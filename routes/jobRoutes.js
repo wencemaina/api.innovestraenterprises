@@ -8,6 +8,8 @@ const { getAllJobs } = require("../controllers/getAllJobsController");
 
 const { getEmployerJobs } = require("../controllers/getEmployerJobsController");
 
+const { getJobById } = require("../controllers/getJobByIdController");
+
 const {
 	getAllWriterJobs,
 } = require("../controllers/getAllWriterJobsController");
@@ -19,4 +21,6 @@ router.get("/all", getAllJobs);
 router.get("/employer-jobs", getEmployerJobs);
 
 router.get("/all-writer-jobs", getAllWriterJobs);
+
+router.get("/job-by-id/:id", getJobById);
 module.exports = router;
