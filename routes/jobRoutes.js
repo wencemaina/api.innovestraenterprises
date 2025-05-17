@@ -13,6 +13,11 @@ const { getJobById } = require("../controllers/getJobByIdController");
 const {
 	getAllWriterJobs,
 } = require("../controllers/getAllWriterJobsController");
+
+const { jobBids } = require("../controllers/jobBidsController");
+
+const { checkJobBid } = require("../controllers/checkBidsController");
+
 // Apply the multer middleware directly in the route
 router.post("/create/new-job", upload.any(), createJob);
 
@@ -23,4 +28,9 @@ router.get("/employer-jobs", getEmployerJobs);
 router.get("/all-writer-jobs", getAllWriterJobs);
 
 router.get("/job-by-id/:id", getJobById);
+
+router.post("/job-bids", jobBids);
+
+router.get("/check-job-bid/:jobId", checkJobBid);
+
 module.exports = router;
