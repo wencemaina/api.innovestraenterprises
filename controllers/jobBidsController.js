@@ -1,4 +1,5 @@
 const { getDb } = require("../db");
+const { ObjectId } = require("mongodb");
 
 exports.jobBids = async (req, res) => {
 	try {
@@ -42,9 +43,27 @@ exports.jobBids = async (req, res) => {
 		const db = await getDb();
 		const result = await db.collection("bids").insertOne(bid);
 
+		// Create notification for the bid submission
+		const notification = {
+			type: "bid",
+			title: "New Bid Submitted",
+			description: `You have submitted a bid of $${bidAmount} for job: ${jobTitle}`,
+			time: new Date(),
+			read: false,
+			writerId, // Include writer ID for filtering notifications
+			jobId, // Include job ID for reference
+			bidId: result.insertedId, // Include the bid ID for reference
+			deliveryDays,
+			createdAt: new Date(),
+		};
+
+		// Store notification in the notifications collection
+		await db.collection("notifications").insertOne(notification);
+		console.log("✅ Notification created for bid submission");
+
 		// Send success response
 		res.status(201).json({
-			success: true,
+			success: false,
 			message: "Bid submitted successfully",
 			bidId: result.insertedId,
 		});
