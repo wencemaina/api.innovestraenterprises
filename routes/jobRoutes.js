@@ -53,6 +53,6 @@ router.get("/job-by-id/:jobId", getJobById);
 
 router.get("/job-bids/:jobId", getJobBids);
 
-router.post("/bids/accept/:proposalId", acceptJobBid);
+router.post("/bids/accept/:bidId", acceptJobBid);
 
 module.exports = router;
