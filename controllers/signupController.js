@@ -5,8 +5,17 @@ const { connectToMongo, getDb } = require("../db"); // Adjust the path if needed
 exports.signUp = async (req, res) => {
 	console.log("Received signup request", req.body);
 	try {
-		const { email, password, name, phone, userType, confirmPassword } =
-			req.body; // Destructure all required fields
+		const {
+			email,
+			password,
+			name,
+			phone,
+			userType,
+			confirmPassword,
+			// Additional fields for writer account type
+			country,
+			memberSince,
+		} = req.body;
 
 		// Basic validation before hitting DB. Check for all required fields.
 		if (
@@ -15,7 +24,7 @@ exports.signUp = async (req, res) => {
 			!name?.trim() ||
 			!phone?.trim() ||
 			!userType?.trim() ||
-			!confirmPassword?.trim() || // Added confirmPassword validation
+			!confirmPassword?.trim() ||
 			typeof email !== "string" ||
 			!email.includes("@")
 		) {
@@ -29,13 +38,16 @@ exports.signUp = async (req, res) => {
 			return res.status(400).json({ message: "Passwords do not match" });
 		}
 
+		// For writer accounts, we'll use Kenya as default if country isn't provided
+		// No validation error since we'll use the default
+
 		await connectToMongo(); // Ensure MongoDB connection
 		const db = getDb();
 		const usersCollection = db.collection("users");
 
 		// Check if the email is already registered
 		const existingUser = await usersCollection.findOne({
-			"personalInfo.email": email.toLowerCase(), // Updated query path
+			"personalInfo.email": email.toLowerCase(),
 		});
 
 		if (existingUser) {
@@ -48,7 +60,7 @@ exports.signUp = async (req, res) => {
 		const userId = uuidv4();
 
 		// Hash the password
-		const hashedPassword = await bcrypt.hash(password, 14); // 10 is the salt rounds
+		const hashedPassword = await bcrypt.hash(password, 14); // 14 is the salt rounds
 
 		// Construct the user data object with proper structure
 		const userData = {
@@ -67,7 +79,17 @@ exports.signUp = async (req, res) => {
 			status: "active",
 		};
 
-		// Insert the new user into the users collection (removed the "data" wrapper)
+		// Add writer-specific fields if the account type is writer
+		if (userType === "writer") {
+			userData.writerProfile = {
+				country: country?.trim() || "Kenya", // Default to Kenya if not provided
+				memberSince: memberSince || new Date(), // Default to current date if not provided
+				completedJobs: 0, // Initialize to 0 for new writers
+				rating: 0, // Initialize rating to 0 for new writers
+			};
+		}
+
+		// Insert the new user into the users collection
 		const result = await usersCollection.insertOne(userData);
 
 		// Check if the insertion was successful
