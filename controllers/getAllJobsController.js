@@ -92,7 +92,7 @@ exports.getJobById = async (req, res) => {
 			isDisputed: job.isDisputed,
 		};
 		console.log(`✅ Successfully retrieved job with ID: ${jobId}`);
-		console.log("Job data:", formattedJob);
+
 		return res.status(200).json({
 			message: "Job retrieved successfully",
 			job: formattedJob,
