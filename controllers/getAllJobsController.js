@@ -51,29 +51,23 @@ exports.getAllJobs = async (req, res) => {
 };
 
 exports.getJobById = async (req, res) => {
-	console.log(`🔄 Received get job by ID request for: ${req.params.id}`);
-
+	console.log(`🔄 Received get job by ID request for: ${req.params.jobId}`);
 	try {
 		await connectToMongo();
 		const db = getDb();
 		const jobsCollection = db.collection("jobs");
-
 		// Get the job ID from request parameters
 		const jobId = req.params.jobId;
-
 		if (!jobId) {
 			console.warn("⛔ No job ID provided");
 			return res.status(400).json({ message: "Job ID is required" });
 		}
-
 		// Find job by ID
 		const job = await jobsCollection.findOne({ id: jobId });
-
 		if (!job) {
 			console.warn(`⛔ Job with ID ${jobId} not found`);
 			return res.status(404).json({ message: "Job not found" });
 		}
-
 		// Format the job data
 		const formattedJob = {
 			id: job.id,
@@ -84,6 +78,9 @@ exports.getJobById = async (req, res) => {
 			deadline: job.deadline,
 			bids: job.bids,
 			skills: job.skills,
+			visibility: job.visibility, // Added visibility
+			createdAt: job.createdAt, // Added createdAt
+			category: job.category, // Added category
 			isPublic: job.isPublic,
 			isPrivate: job.isPrivate,
 			isSubmitted: job.isSubmitted,
@@ -95,7 +92,6 @@ exports.getJobById = async (req, res) => {
 			isInRevision: job.isInRevision,
 			isDisputed: job.isDisputed,
 		};
-
 		console.log(`✅ Successfully retrieved job with ID: ${jobId}`);
 		return res.status(200).json({
 			message: "Job retrieved successfully",
