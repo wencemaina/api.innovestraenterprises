@@ -48,7 +48,7 @@ exports.createJob = async (req, res) => {
 			type: formData.type || "Freelance Project",
 			bids: parseInt(formData.bids || "0"),
 			skills: Array.isArray(formData.skills) ? formData.skills : [],
-			projectType: formData.projectType || "",
+			category: formData.category || "",
 			priority: formData.priority || "",
 			wordCount: formData.wordCount || "",
 			visibility: formData.visibility || "",
