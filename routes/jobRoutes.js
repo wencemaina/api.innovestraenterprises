@@ -18,6 +18,7 @@ const {
 	createJobBid,
 	acceptJobBid,
 	getAcceptedBids,
+	getUserBids,
 } = require("../controllers/jobBidsController");
 
 const { checkJobBid } = require("../controllers/checkBidsController");
@@ -54,5 +55,7 @@ router.get("/job-by-id/:jobId", getJobById);
 router.get("/job-bids/:jobId", getJobBids);
 
 router.post("/bids/accept/:bidId", acceptJobBid);
+
+router.get("/get-writer-bids", getUserBids);
 
 module.exports = router;
