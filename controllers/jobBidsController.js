@@ -45,16 +45,18 @@ exports.createJobBid = async (req, res) => {
 				message: "Writer not found",
 			});
 		}
-
 		// Generate custom bid ID
 		const bidId = generateBidId();
+
+		// Create current timestamp for submission
+		const submissionTime = new Date();
 
 		// Create bid object with writer information included
 		const bid = {
 			bidId: bidId, // Add custom bid ID
 			jobId,
 			jobTitle,
-			bidAmount: `${bidAmount}`, // Format as string with $ prefix like in the example
+			bidAmount: `$${bidAmount}`, // Format as string with $ prefix like in the example
 			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
 			notes: notes, // Renamed from notes to coverLetter to match expected format
 			freelancer: {
@@ -65,8 +67,8 @@ exports.createJobBid = async (req, res) => {
 				country: writer.writerProfile?.country || "Kenya",
 			},
 			status: "pending", // Default status
-			submittedAt: "Just now", // Initial submission time text
-			createdAt: new Date(), // Actual timestamp for calculations
+			submittedAt: submissionTime, // Use actual timestamp instead of "Just now"
+			createdAt: submissionTime, // Actual timestamp for calculations
 		};
 		// Store bid in database
 		const result = await db.collection("bids").insertOne(bid);
@@ -75,13 +77,13 @@ exports.createJobBid = async (req, res) => {
 			type: "bid",
 			title: "New Bid Submitted",
 			description: `You have submitted a bid of $${bidAmount} for job: ${jobTitle}`,
-			time: new Date(),
+			time: submissionTime,
 			read: false,
 			writerId, // Include writer ID for filtering notifications
 			jobId, // Include job ID for reference
 			bidId: bidId, // Use the custom bidId instead of MongoDB's _id
 			deliveryDays,
-			createdAt: new Date(),
+			createdAt: submissionTime,
 		};
 		// Store notification in the notifications collection
 		await db.collection("notifications").insertOne(notification);
@@ -209,6 +211,23 @@ exports.acceptJobBid = async (req, res) => {
 			},
 		);
 
+		// Mark all other bids for this job as declined
+		await db.collection("bids").updateMany(
+			{
+				jobId: bid.jobId,
+				bidId: { $ne: bidId }, // Not equal to the current bid
+			},
+			{
+				$set: {
+					status: "declined",
+					declinedAt: new Date(),
+					declinedBy: employerId,
+				},
+			},
+		);
+
+		console.log("✅ Other bids for this job marked as declined");
+
 		// Update job status to isInProgress: true
 		await db.collection("jobs").updateOne(
 			{ jobId: bid.jobId },
@@ -218,6 +237,7 @@ exports.acceptJobBid = async (req, res) => {
 				},
 			},
 		);
+
 		console.log("✅ Job status updated to in progress for job:", bid.jobId);
 
 		// Get employer information for notification
@@ -254,11 +274,40 @@ exports.acceptJobBid = async (req, res) => {
 			createdAt: new Date(),
 		};
 
-		// Store notifications in the database
+		// Create notifications for other freelancers whose bids were declined
+		const declinedBids = await db
+			.collection("bids")
+			.find({
+				jobId: bid.jobId,
+				bidId: { $ne: bidId },
+			})
+			.toArray();
+
+		const declinedNotifications = declinedBids.map((declinedBid) => ({
+			type: "bid_declined",
+			title: "Bid Declined",
+			description: `Your bid of ${declinedBid.bidAmount} for job: ${declinedBid.jobTitle} has been declined.`,
+			time: new Date(),
+			read: false,
+			writerId: declinedBid.freelancer.id,
+			employerId,
+			jobId: declinedBid.jobId,
+			bidId: declinedBid.bidId,
+			createdAt: new Date(),
+		}));
+
+		// Store all notifications in the database
 		await db
 			.collection("notifications")
-			.insertMany([writerNotification, employerNotification]);
-		console.log("✅ Notifications created for bid acceptance");
+			.insertMany([
+				writerNotification,
+				employerNotification,
+				...declinedNotifications,
+			]);
+
+		console.log(
+			"✅ Notifications created for bid acceptance and declined bids",
+		);
 
 		// Send success response
 		res.status(200).json({
