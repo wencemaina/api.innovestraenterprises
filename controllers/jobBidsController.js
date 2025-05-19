@@ -1,9 +1,21 @@
 const { getDb } = require("../db");
 
+const crypto = require("crypto"); // Node.js built-in for generating IDs
+
+/**
+ * Generate a custom bid ID
+ * Format: BID-{timestamp}-{random}
+ * @returns {string} A unique bid identifier
+ */
+function generateBidId() {
+	const timestamp = Date.now().toString(36); // Convert timestamp to base36
+	const randomPart = crypto.randomBytes(4).toString("hex"); // Generate 8 random hex characters
+	return `BID-${timestamp}-${randomPart}`.toUpperCase();
+}
+
 exports.createJobBid = async (req, res) => {
 	try {
 		console.log("🔄 Received job bids request", req.body);
-
 		// Extract writer ID from cookies
 		const writerId = req.cookies["YwAsmAN"];
 		if (!writerId) {
@@ -12,10 +24,8 @@ exports.createJobBid = async (req, res) => {
 				message: "Writer not authenticated",
 			});
 		}
-
 		// Extract bid information from request body
 		const { jobId, jobTitle, bidAmount, deliveryDays, notes } = req.body;
-
 		// Validate required fields
 		if (!jobId || !bidAmount || !deliveryDays) {
 			return res.status(400).json({
@@ -23,15 +33,12 @@ exports.createJobBid = async (req, res) => {
 				message: "Missing required bid information",
 			});
 		}
-
 		// Get database connection
 		const db = await getDb();
-
 		// Fetch the writer's information to include in the bid
 		const writer = await db
 			.collection("users")
 			.findOne({ userId: writerId });
-
 		if (!writer) {
 			return res.status(404).json({
 				success: false,
@@ -39,13 +46,17 @@ exports.createJobBid = async (req, res) => {
 			});
 		}
 
+		// Generate custom bid ID
+		const bidId = generateBidId();
+
 		// Create bid object with writer information included
 		const bid = {
+			bidId: bidId, // Add custom bid ID
 			jobId,
 			jobTitle,
 			bidAmount: `$${bidAmount}`, // Format as string with $ prefix like in the example
 			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
-			notes,
+			coverLetter: notes, // Renamed from notes to coverLetter to match expected format
 			freelancer: {
 				id: writerId,
 				name: writer.personalInfo.name,
@@ -57,10 +68,8 @@ exports.createJobBid = async (req, res) => {
 			submittedAt: "Just now", // Initial submission time text
 			createdAt: new Date(), // Actual timestamp for calculations
 		};
-
 		// Store bid in database
 		const result = await db.collection("bids").insertOne(bid);
-
 		// Create notification for the bid submission
 		const notification = {
 			type: "bid",
@@ -70,20 +79,18 @@ exports.createJobBid = async (req, res) => {
 			read: false,
 			writerId, // Include writer ID for filtering notifications
 			jobId, // Include job ID for reference
-			bidId: result.insertedId, // Include the bid ID for reference
+			bidId: bidId, // Use the custom bidId instead of MongoDB's _id
 			deliveryDays,
 			createdAt: new Date(),
 		};
-
 		// Store notification in the notifications collection
 		await db.collection("notifications").insertOne(notification);
 		console.log("✅ Notification created for bid submission");
-
 		// Send success response
 		res.status(201).json({
-			success: true, // Fixed: changed from false to true
+			success: true,
 			message: "Bid submitted successfully",
-			bidId: result.insertedId,
+			bidId: bidId, // Return the custom bidId
 		});
 	} catch (error) {
 		console.error("❌ Error submitting bid:", error);
@@ -93,7 +100,6 @@ exports.createJobBid = async (req, res) => {
 		});
 	}
 };
-
 exports.getJobBids = async (req, res) => {
 	try {
 		const jobId = req.params.jobId;
@@ -174,7 +180,7 @@ exports.acceptJobBid = async (req, res) => {
 
 		// Find the bid to update
 		const bid = await db.collection("bids").findOne({
-			_id: new ObjectId(bidId),
+			id: new ObjectId(bidId),
 		});
 
 		if (!bid) {
@@ -194,7 +200,7 @@ exports.acceptJobBid = async (req, res) => {
 
 		// Update bid status to accepted
 		await db.collection("bids").updateOne(
-			{ _id: new ObjectId(bidId) },
+			{ id: new ObjectId(bidId) },
 			{
 				$set: {
 					status: "accepted",
@@ -220,7 +226,7 @@ exports.acceptJobBid = async (req, res) => {
 			writerId: bid.freelancer.id,
 			employerId,
 			jobId: bid.jobId,
-			bidId: bid._id,
+			bidId: bid.id,
 			createdAt: new Date(),
 		};
 
@@ -234,7 +240,7 @@ exports.acceptJobBid = async (req, res) => {
 			employerId,
 			writerId: bid.freelancer.id,
 			jobId: bid.jobId,
-			bidId: bid._id,
+			bidId: bid.id,
 			createdAt: new Date(),
 		};
 
