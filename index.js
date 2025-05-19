@@ -37,6 +37,7 @@ const userRoutes = require("./routes/usersRoutes");
 
 const authRoutes = require("./routes/authRoutes");
 const jobRoutes = require("./routes/jobRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
 
 // Middleware to parse JSON
 app.use(express.json());
@@ -50,6 +51,7 @@ app.get("/", (req, res) => {
 app.use("/api/users", userRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/jobs", jobRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 // Start server
 app.listen(PORT, () => {
