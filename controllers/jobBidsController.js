@@ -145,3 +145,171 @@ exports.getJobBids = async (req, res) => {
 		});
 	}
 };
+
+exports.acceptJobBid = async (req, res) => {
+	try {
+		console.log("🔄 Received job bid acceptance request", req.params);
+
+		// Extract bid ID from request parameters
+		const { bidId } = req.params;
+
+		if (!bidId) {
+			return res.status(400).json({
+				success: false,
+				message: "Bid ID is required",
+			});
+		}
+
+		// Extract employer ID from cookies (assuming employers are authenticated similarly to writers)
+		const employerId = req.cookies["EmPloYeR"]; // Adjust cookie name as needed
+		if (!employerId) {
+			return res.status(401).json({
+				success: false,
+				message: "Employer not authenticated",
+			});
+		}
+
+		// Get database connection
+		const db = await getDb();
+
+		// Find the bid to update
+		const bid = await db.collection("bids").findOne({
+			_id: new ObjectId(bidId),
+		});
+
+		if (!bid) {
+			return res.status(404).json({
+				success: false,
+				message: "Bid not found",
+			});
+		}
+
+		// Check if the bid is already accepted (optional validation)
+		if (bid.status === "accepted") {
+			return res.status(400).json({
+				success: false,
+				message: "This bid has already been accepted",
+			});
+		}
+
+		// Update bid status to accepted
+		await db.collection("bids").updateOne(
+			{ _id: new ObjectId(bidId) },
+			{
+				$set: {
+					status: "accepted",
+					acceptedAt: new Date(),
+					acceptedBy: employerId,
+				},
+			},
+		);
+
+		// Get employer information for notification
+		const employer = await db
+			.collection("users")
+			.findOne({ userId: employerId });
+		const employerName = employer?.personalInfo?.name || "Employer";
+
+		// Create notification for the writer
+		const writerNotification = {
+			type: "bid_accepted",
+			title: "Bid Accepted",
+			description: `Your bid of ${bid.bidAmount} for job: ${bid.jobTitle} has been accepted!`,
+			time: new Date(),
+			read: false,
+			writerId: bid.freelancer.id,
+			employerId,
+			jobId: bid.jobId,
+			bidId: bid._id,
+			createdAt: new Date(),
+		};
+
+		// Create notification for the employer
+		const employerNotification = {
+			type: "bid_accepted",
+			title: "Bid Acceptance Confirmed",
+			description: `You have accepted ${bid.freelancer.name}'s bid of ${bid.bidAmount} for job: ${bid.jobTitle}`,
+			time: new Date(),
+			read: false,
+			employerId,
+			writerId: bid.freelancer.id,
+			jobId: bid.jobId,
+			bidId: bid._id,
+			createdAt: new Date(),
+		};
+
+		// Store notifications in the database
+		await db
+			.collection("notifications")
+			.insertMany([writerNotification, employerNotification]);
+		console.log("✅ Notifications created for bid acceptance");
+
+		// Send success response
+		res.status(200).json({
+			success: true,
+			message: "Bid accepted successfully",
+			bid: {
+				...bid,
+				status: "accepted",
+				acceptedAt: new Date(),
+			},
+		});
+	} catch (error) {
+		console.error("❌ Error accepting bid:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to accept bid",
+		});
+	}
+};
+
+exports.getAcceptedBids = async (req, res) => {
+	try {
+		// Either get bids accepted by a specific employer or bids of a specific writer that were accepted
+		const { employerId, writerId } = req.query;
+
+		if (!employerId && !writerId) {
+			return res.status(400).json({
+				success: false,
+				message: "Either employerId or writerId is required",
+			});
+		}
+
+		// Get database connection
+		const db = await getDb();
+
+		// Prepare query based on provided parameters
+		const query = { status: "accepted" };
+
+		if (employerId) {
+			query.acceptedBy = employerId;
+		}
+
+		if (writerId) {
+			query["freelancer.id"] = writerId;
+		}
+
+		// Fetch accepted bids
+		const acceptedBids = await db
+			.collection("bids")
+			.find(query)
+			.sort({ acceptedAt: -1 })
+			.toArray();
+
+		console.log(`✅ Found ${acceptedBids.length} accepted bids`);
+
+		// Return the accepted bids
+		res.status(200).json({
+			success: true,
+			message: "Accepted bids retrieved successfully",
+			count: acceptedBids.length,
+			bids: acceptedBids,
+		});
+	} catch (error) {
+		console.error("❌ Error fetching accepted bids:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch accepted bids",
+		});
+	}
+};
