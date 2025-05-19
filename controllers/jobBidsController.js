@@ -156,10 +156,8 @@ exports.getJobBids = async (req, res) => {
 exports.acceptJobBid = async (req, res) => {
 	try {
 		console.log("🔄 Received job bid acceptance request", req.params);
-
 		// Extract bid ID from request parameters
 		const { bidId } = req.params;
-
 		if (!bidId) {
 			return res.status(400).json({
 				success: false,
@@ -168,7 +166,7 @@ exports.acceptJobBid = async (req, res) => {
 		}
 
 		// Extract employer ID from cookies (assuming employers are authenticated similarly to writers)
-		const employerId = req.cookies["EmPloYeR"]; // Adjust cookie name as needed
+		const employerId = req.cookies["YwAsmAN"]; // Adjust cookie name as needed
 		if (!employerId) {
 			return res.status(401).json({
 				success: false,
@@ -179,9 +177,9 @@ exports.acceptJobBid = async (req, res) => {
 		// Get database connection
 		const db = await getDb();
 
-		// Find the bid to update
+		// Find the bid to update using the string bidId (not ObjectId)
 		const bid = await db.collection("bids").findOne({
-			id: new ObjectId(bidId),
+			bidId: bidId,
 		});
 
 		if (!bid) {
@@ -199,9 +197,9 @@ exports.acceptJobBid = async (req, res) => {
 			});
 		}
 
-		// Update bid status to accepted
+		// Update bid status to accepted, using bidId string
 		await db.collection("bids").updateOne(
-			{ id: new ObjectId(bidId) },
+			{ bidId: bidId },
 			{
 				$set: {
 					status: "accepted",
@@ -210,6 +208,17 @@ exports.acceptJobBid = async (req, res) => {
 				},
 			},
 		);
+
+		// Update job status to isInProgress: true
+		await db.collection("jobs").updateOne(
+			{ jobId: bid.jobId },
+			{
+				$set: {
+					isInProgress: true,
+				},
+			},
+		);
+		console.log("✅ Job status updated to in progress for job:", bid.jobId);
 
 		// Get employer information for notification
 		const employer = await db
@@ -227,7 +236,7 @@ exports.acceptJobBid = async (req, res) => {
 			writerId: bid.freelancer.id,
 			employerId,
 			jobId: bid.jobId,
-			bidId: bid.id,
+			bidId: bid.bidId, // Use bidId string
 			createdAt: new Date(),
 		};
 
@@ -241,7 +250,7 @@ exports.acceptJobBid = async (req, res) => {
 			employerId,
 			writerId: bid.freelancer.id,
 			jobId: bid.jobId,
-			bidId: bid.id,
+			bidId: bid.bidId, // Use bidId string
 			createdAt: new Date(),
 		};
 
