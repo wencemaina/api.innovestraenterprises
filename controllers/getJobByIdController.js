@@ -2,7 +2,7 @@ const { getDb } = require("../db");
 
 exports.getJobById = async (req, res) => {
 	try {
-		const id = req.params.id;
+		const id = req.params.jobId;
 		console.log("Requested job ID:", id);
 
 		// Get database connection
