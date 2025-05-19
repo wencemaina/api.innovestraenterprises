@@ -87,7 +87,7 @@ exports.createJobBid = async (req, res) => {
 				bidAmount: `${bidAmount}`,
 				deliveryTime: `${deliveryDays} days`,
 				notes: notes,
-				freelancer: {
+				writer: {
 					id: writerId,
 					name: writer.personalInfo.name,
 					rating: writer.writerProfile?.rating || 0,
@@ -132,18 +132,14 @@ exports.createJobBid = async (req, res) => {
 						);
 
 						// Fallback: If increment failed, try setting the value directly in the jobs collection
-						const setResult = await db
-							.collection("jobs")
-							.updateOne(
-								{ id: jobId },
-								{
-									$set: {
-										bids: job.bids
-											? parseInt(job.bids) + 1
-											: 1,
-									},
+						const setResult = await db.collection("jobs").updateOne(
+							{ id: jobId },
+							{
+								$set: {
+									bids: job.bids ? parseInt(job.bids) + 1 : 1,
 								},
-							);
+							},
+						);
 						console.log(
 							`Fallback update result for jobs collection: ${JSON.stringify(
 								setResult,
@@ -477,6 +473,97 @@ exports.getAcceptedBids = async (req, res) => {
 		res.status(500).json({
 			success: false,
 			message: "Failed to fetch accepted bids",
+		});
+	}
+};
+
+exports.getUserBids = async (req, res) => {
+	try {
+		// Get the writerId from the cookie
+		const writerId = req.cookies["YwAsmAN"];
+
+		if (!writerId) {
+			return res.status(401).json({
+				success: false,
+				message: "User not authenticated or cookie missing",
+			});
+		}
+
+		// Get database connection
+		const db = await getDb();
+
+		// Fetch bids where the user is the writer
+		const userBids = await db
+			.collection("bids")
+			.find({ "writer.id": writerId })
+			.sort({ createdAt: -1 })
+			.toArray();
+
+		// If no bids found, return empty array
+		if (!userBids.length) {
+			return res.status(200).json({
+				success: true,
+				message: "No bids found for this user",
+				count: 0,
+				bids: [],
+			});
+		}
+
+		// Extract job IDs to fetch job details
+		const jobIds = userBids.map((bid) => bid.jobId);
+
+		// Fetch job details for all the bid jobs
+		const jobs = await db
+			.collection("jobs")
+			.find({ jobId: { $in: jobIds } })
+			.toArray();
+
+		// Create a map of jobId to job description for quick lookup
+		const jobDetailsMap = {};
+		jobs.forEach((job) => {
+			jobDetailsMap[job.jobId] = job.description || "";
+		});
+
+		// Format bids with job descriptions and in the requested structure
+		const formattedBids = userBids.map((bid) => {
+			return {
+				id: bid._id,
+				bidId: bid.bidId,
+				jobId: bid.jobId,
+				jobTitle: bid.jobTitle,
+				budget: bid.budget || "Not specified",
+				bidAmount: `$${bid.bidAmount}`,
+				deliveryTime: bid.deliveryTime,
+				bidDate: new Date(bid.submittedAt).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "short",
+					day: "numeric",
+				}),
+				status:
+					bid.status.charAt(0).toUpperCase() + bid.status.slice(1), // Capitalize status
+				jobDescription:
+					jobDetailsMap[bid.jobId] || "No description available",
+				notes: bid.notes || "",
+			};
+		});
+
+		console.log(
+			`✅ Found and formatted ${formattedBids.length} bids for user ${writerId}`,
+		);
+
+		// Return the formatted bids
+		res.status(200).json({
+			success: true,
+			message: "User bids retrieved successfully",
+			count: formattedBids.length,
+			bids: formattedBids,
+		});
+	} catch (error) {
+		console.error("❌ Error fetching user bids:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch user bids",
+			error: error.message,
 		});
 	}
 };
