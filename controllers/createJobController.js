@@ -42,7 +42,6 @@ exports.createJob = async (req, res) => {
 			title: formData.title || "",
 			description: formData.description || "",
 			briefDescription: formData.briefDescription || "",
-			client: formData.client || "",
 			budget: formData.budget || "",
 			deadline: formData.deadline || "",
 			type: formData.type || "Freelance Project",
