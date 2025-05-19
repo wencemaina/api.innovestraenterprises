@@ -14,8 +14,7 @@ exports.createJobBid = async (req, res) => {
 		}
 
 		// Extract bid information from request body
-		const { jobId, jobTitle, bidAmount, deliveryDays, coverLetter } =
-			req.body;
+		const { jobId, jobTitle, bidAmount, deliveryDays, notes } = req.body;
 
 		// Validate required fields
 		if (!jobId || !bidAmount || !deliveryDays) {
@@ -46,7 +45,7 @@ exports.createJobBid = async (req, res) => {
 			jobTitle,
 			bidAmount: `$${bidAmount}`, // Format as string with $ prefix like in the example
 			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
-			coverLetter,
+			notes,
 			freelancer: {
 				id: writerId,
 				name: writer.personalInfo.name,
