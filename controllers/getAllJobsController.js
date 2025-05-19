@@ -3,8 +3,6 @@ const { connectToMongo, getDb } = require("../db");
 exports.getAllJobs = async (req, res) => {
 	console.log("🔄 Received get all jobs request");
 
-	const platform = req.headers["x-device-type"] || "web";
-
 	try {
 		await connectToMongo();
 		const db = getDb();
