@@ -56,6 +56,7 @@ exports.getJobById = async (req, res) => {
 		const jobsCollection = db.collection("jobs");
 		// Get the job ID from request parameters
 		const jobId = req.params.jobId;
+
 		if (!jobId) {
 			console.warn("⛔ No job ID provided");
 			return res.status(400).json({ message: "Job ID is required" });
@@ -91,6 +92,7 @@ exports.getJobById = async (req, res) => {
 			isDisputed: job.isDisputed,
 		};
 		console.log(`✅ Successfully retrieved job with ID: ${jobId}`);
+		console.log("Job data:", formattedJob);
 		return res.status(200).json({
 			message: "Job retrieved successfully",
 			job: formattedJob,
