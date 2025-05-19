@@ -24,10 +24,6 @@ const {
 const { checkJobBid } = require("../controllers/checkBidsController");
 
 const {
-	getAllNotifications,
-} = require("../controllers/getAllNotificationsController");
-
-const {
 	getAllWriterBids,
 } = require("../controllers/getAllWriterBidsController");
 
