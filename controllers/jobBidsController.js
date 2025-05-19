@@ -13,6 +13,13 @@ function generateBidId() {
 	return `BID-${timestamp}-${randomPart}`.toUpperCase();
 }
 
+// Helper function to generate unique notification ID
+function generateNotificationId() {
+	return (
+		"notif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9)
+	);
+}
+
 exports.createJobBid = async (req, res) => {
 	try {
 		console.log("🔄 Received job bids request", req.body);
@@ -167,12 +174,17 @@ exports.createJobBid = async (req, res) => {
 		const notificationDesc = existingBid
 			? `You have updated your bid to ${bidAmount} for job: ${jobTitle}`
 			: `You have submitted a bid of ${bidAmount} for job: ${jobTitle}`;
+
+		// Generate unique notification ID
+		const notificationId = generateNotificationId();
+
 		const notification = {
+			id: notificationId, // Added unique notification ID
 			type: notificationType,
 			title: notificationTitle,
 			description: notificationDesc,
 			time: submissionTime,
-			read: false,
+			isRead: false, // Changed from 'read: false' to 'isRead: false' for consistency
 			writerId,
 			jobId,
 			bidId: bidId,
@@ -184,7 +196,7 @@ exports.createJobBid = async (req, res) => {
 		console.log(
 			`✅ Notification created for bid ${
 				existingBid ? "update" : "submission"
-			}`,
+			} with ID: ${notificationId}`,
 		);
 		// Send success response
 		res.status(statusCode).json({
@@ -344,13 +356,18 @@ exports.acceptJobBid = async (req, res) => {
 			.findOne({ userId: employerId });
 		const employerName = employer?.personalInfo?.name || "Employer";
 
+		// Generate notification IDs
+		const writerNotificationId = generateNotificationId();
+		const employerNotificationId = generateNotificationId();
+
 		// Create notification for the writer
 		const writerNotification = {
+			id: writerNotificationId,
 			type: "bid_accepted",
 			title: "Bid Accepted",
 			description: `Your bid of ${bid.bidAmount} for job: ${bid.jobTitle} has been accepted!`,
 			time: new Date(),
-			read: false,
+			isRead: false, // Changed from 'read' to 'isRead'
 			writerId: bid.freelancer.id,
 			employerId,
 			jobId: bid.jobId,
@@ -360,11 +377,12 @@ exports.acceptJobBid = async (req, res) => {
 
 		// Create notification for the employer
 		const employerNotification = {
+			id: employerNotificationId,
 			type: "bid_accepted",
 			title: "Bid Acceptance Confirmed",
 			description: `You have accepted ${bid.freelancer.name}'s bid of ${bid.bidAmount} for job: ${bid.jobTitle}`,
 			time: new Date(),
-			read: false,
+			isRead: false, // Changed from 'read' to 'isRead'
 			employerId,
 			writerId: bid.freelancer.id,
 			jobId: bid.jobId,
@@ -382,11 +400,12 @@ exports.acceptJobBid = async (req, res) => {
 			.toArray();
 
 		const declinedNotifications = declinedBids.map((declinedBid) => ({
+			id: generateNotificationId(), // Unique ID for each declined notification
 			type: "bid_declined",
 			title: "Bid Declined",
 			description: `Your bid of ${declinedBid.bidAmount} for job: ${declinedBid.jobTitle} has been declined.`,
 			time: new Date(),
-			read: false,
+			isRead: false, // Changed from 'read' to 'isRead'
 			writerId: declinedBid.freelancer.id,
 			employerId,
 			jobId: declinedBid.jobId,
@@ -404,7 +423,7 @@ exports.acceptJobBid = async (req, res) => {
 			]);
 
 		console.log(
-			"✅ Notifications created for bid acceptance and declined bids",
+			`✅ Notifications created for bid acceptance (writer: ${writerNotificationId}, employer: ${employerNotificationId}) and ${declinedNotifications.length} declined bids`,
 		);
 
 		// Send success response
