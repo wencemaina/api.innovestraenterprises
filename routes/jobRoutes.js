@@ -42,8 +42,6 @@ router.post("/job-bids", createJobBid);
 
 router.get("/check-job-bid/:jobId", checkJobBid);
 
-router.get("/notifications", getAllNotifications);
-
 router.get("/all-writer-bids", getAllWriterBids);
 
 router.get("/job-by-id/:jobId", getJobById);
