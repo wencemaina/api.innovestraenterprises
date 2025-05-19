@@ -12,7 +12,6 @@ function generateBidId() {
 	const randomPart = crypto.randomBytes(4).toString("hex"); // Generate 8 random hex characters
 	return `BID-${timestamp}-${randomPart}`.toUpperCase();
 }
-
 exports.createJobBid = async (req, res) => {
 	try {
 		console.log("🔄 Received job bids request", req.body);
@@ -102,11 +101,66 @@ exports.createJobBid = async (req, res) => {
 			await db.collection("bids").insertOne(bid);
 			message = "Bid submitted successfully";
 
-			// Increment the bids count on the job document - moved inside new bid condition
-			await db
-				.collection("jobs")
-				.updateOne({ jobId }, { $inc: { bids: 1 } });
-			console.log(`✅ Job bids count incremented for job: ${jobId}`);
+			// Increment the bids count field in the JOBS collection (not the bids collection)
+			try {
+				// First check if the job document exists in the jobs collection and what the current bid count is
+				const job = await db.collection("jobs").findOne({ jobId });
+				if (!job) {
+					console.error(
+						`❌ Job document not found in jobs collection for jobId: ${jobId}`,
+					);
+				} else {
+					console.log(
+						`Current 'bids' count in jobs collection for job ${jobId}: ${
+							job.bids !== undefined ? job.bids : "undefined"
+						}`,
+					);
+
+					// Update the bids field in the jobs collection, not the bids collection
+					const updateResult = await db
+						.collection("jobs")
+						.updateOne({ jobId }, { $inc: { bids: 1 } });
+
+					if (updateResult.matchedCount === 0) {
+						console.error(
+							`❌ No job document matched in jobs collection with jobId: ${jobId}`,
+						);
+					} else if (updateResult.modifiedCount === 0) {
+						console.error(
+							`❌ Job document found in jobs collection but 'bids' field not updated for jobId: ${jobId}`,
+						);
+
+						// Fallback: If increment failed, try setting the value directly in the jobs collection
+						const setResult = await db
+							.collection("jobs")
+							.updateOne(
+								{ jobId },
+								{
+									$set: {
+										bids: job.bids
+											? parseInt(job.bids) + 1
+											: 1,
+									},
+								},
+							);
+						console.log(
+							`Fallback update result for jobs collection: ${JSON.stringify(
+								setResult,
+							)}`,
+						);
+					} else {
+						console.log(
+							`✅ Job 'bids' count incremented in jobs collection for jobId: ${jobId}`,
+						);
+					}
+				}
+			} catch (bidUpdateError) {
+				console.error(
+					`❌ Error updating bid count in jobs collection:`,
+					bidUpdateError,
+				);
+				// Continue execution - don't let bid count update failure stop the process
+			}
 		}
 		// Create notification for the bid submission or update
 		const notificationType = existingBid ? "bid_update" : "bid";
