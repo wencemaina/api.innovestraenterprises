@@ -24,8 +24,10 @@ exports.createJobBid = async (req, res) => {
 				message: "Writer not authenticated",
 			});
 		}
+
 		// Extract bid information from request body
 		const { jobId, jobTitle, bidAmount, deliveryDays, notes } = req.body;
+
 		// Validate required fields
 		if (!jobId || !bidAmount || !deliveryDays) {
 			return res.status(400).json({
@@ -33,72 +35,126 @@ exports.createJobBid = async (req, res) => {
 				message: "Missing required bid information",
 			});
 		}
+
 		// Get database connection
 		const db = await getDb();
+
 		// Fetch the writer's information to include in the bid
 		const writer = await db
 			.collection("users")
 			.findOne({ userId: writerId });
+
 		if (!writer) {
 			return res.status(404).json({
 				success: false,
 				message: "Writer not found",
 			});
 		}
-		// Generate custom bid ID
-		const bidId = generateBidId();
+
+		// Check if a bid already exists for this writer and job
+		const existingBid = await db.collection("bids").findOne({
+			jobId,
+			"freelancer.id": writerId,
+		});
 
 		// Create current timestamp for submission
 		const submissionTime = new Date();
 
-		// Create bid object with writer information included
-		const bid = {
-			bidId: bidId, // Add custom bid ID
-			jobId,
-			jobTitle,
-			bidAmount: `${bidAmount}`, // Format as string with $ prefix like in the example
-			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
-			notes: notes, // Renamed from notes to coverLetter to match expected format
-			freelancer: {
-				id: writerId,
-				name: writer.personalInfo.name,
-				rating: writer.writerProfile?.rating || 0,
-				completedJobs: writer.writerProfile?.completedJobs || 0,
-				country: writer.writerProfile?.country || "Kenya",
-			},
-			status: "pending", // Default status
-			submittedAt: submissionTime, // Use actual timestamp instead of "Just now"
-			createdAt: submissionTime, // Actual timestamp for calculations
-		};
-		// Store bid in database
-		const result = await db.collection("bids").insertOne(bid);
-		// Create notification for the bid submission
+		// Create or update bid
+		let bidId;
+		let message;
+		let statusCode = 201;
+
+		if (existingBid) {
+			// Update existing bid
+			bidId = existingBid.bidId;
+
+			await db.collection("bids").updateOne(
+				{ bidId },
+				{
+					$set: {
+						bidAmount: `${bidAmount}`,
+						deliveryTime: `${deliveryDays} days`,
+						notes: notes,
+						status: "pending", // Reset status to pending if it was something else
+						submittedAt: submissionTime, // Update submission date
+						updatedAt: submissionTime,
+					},
+				},
+			);
+
+			message = "Bid updated successfully";
+			statusCode = 200;
+		} else {
+			// Generate custom bid ID for new bid
+			bidId = generateBidId();
+
+			// Create new bid object with writer information included
+			const bid = {
+				bidId: bidId,
+				jobId,
+				jobTitle,
+				bidAmount: `${bidAmount}`,
+				deliveryTime: `${deliveryDays} days`,
+				notes: notes,
+				freelancer: {
+					id: writerId,
+					name: writer.personalInfo.name,
+					rating: writer.writerProfile?.rating || 0,
+					completedJobs: writer.writerProfile?.completedJobs || 0,
+					country: writer.writerProfile?.country || "Kenya",
+				},
+				status: "pending",
+				submittedAt: submissionTime,
+				createdAt: submissionTime,
+			};
+
+			// Store bid in database
+			await db.collection("bids").insertOne(bid);
+			message = "Bid submitted successfully";
+		}
+
+		// Create notification for the bid submission or update
+		const notificationType = existingBid ? "bid_update" : "bid";
+		const notificationTitle = existingBid
+			? "Bid Updated"
+			: "New Bid Submitted";
+		const notificationDesc = existingBid
+			? `You have updated your bid to ${bidAmount} for job: ${jobTitle}`
+			: `You have submitted a bid of ${bidAmount} for job: ${jobTitle}`;
+
 		const notification = {
-			type: "bid",
-			title: "New Bid Submitted",
-			description: `You have submitted a bid of ${bidAmount} for job: ${jobTitle}`,
+			type: notificationType,
+			title: notificationTitle,
+			description: notificationDesc,
 			time: submissionTime,
 			read: false,
-			writerId, // Include writer ID for filtering notifications
-			jobId, // Include job ID for reference
-			bidId: bidId, // Use the custom bidId instead of MongoDB's _id
+			writerId,
+			jobId,
+			bidId: bidId,
 			deliveryDays,
 			createdAt: submissionTime,
 		};
+
 		// Store notification in the notifications collection
 		await db.collection("notifications").insertOne(notification);
-		console.log("✅ Notification created for bid submission");
+		console.log(
+			`✅ Notification created for bid ${
+				existingBid ? "update" : "submission"
+			}`,
+		);
+
 		// Send success response
-		res.status(201).json({
+		res.status(statusCode).json({
 			success: true,
-			message: "Bid submitted successfully",
-			bidId: bidId, // Return the custom bidId
+			message,
+			bidId,
 		});
 	} catch (error) {
-		console.error("❌ Error submitting bid:", error);
+		console.error("❌ Error processing bid:", error);
 		res.status(500).json({
 			success: false,
-			message: "Failed to submit bid",
+			message: "Failed to process bid",
 		});
 	}
 };
