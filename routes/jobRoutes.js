@@ -14,6 +14,7 @@ const {
 } = require("../controllers/getAllWriterJobsController");
 
 const {
+	getJobBids,
 	createJobBid,
 	acceptJobBid,
 	getAcceptedBids,
@@ -49,6 +50,8 @@ router.get("/notifications", getAllNotifications);
 router.get("/all-writer-bids", getAllWriterBids);
 
 router.get("/job-by-id/:jobId", getJobById);
+
+router.get("/job-bids/:jobId", getJobBids);
 
 router.post("/bids/accept/:proposalId", acceptJobBid);
 
