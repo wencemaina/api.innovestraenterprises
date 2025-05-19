@@ -12,6 +12,7 @@ function generateBidId() {
 	const randomPart = crypto.randomBytes(4).toString("hex"); // Generate 8 random hex characters
 	return `BID-${timestamp}-${randomPart}`.toUpperCase();
 }
+
 exports.createJobBid = async (req, res) => {
 	try {
 		console.log("🔄 Received job bids request", req.body);
@@ -103,11 +104,11 @@ exports.createJobBid = async (req, res) => {
 
 			// Increment the bids count field in the JOBS collection (not the bids collection)
 			try {
-				// First check if the job document exists in the jobs collection and what the current bid count is
-				const job = await db.collection("jobs").findOne({ jobId });
+				// IMPORTANT: In the database the field is named "id" not "jobId"
+				const job = await db.collection("jobs").findOne({ id: jobId });
 				if (!job) {
 					console.error(
-						`❌ Job document not found in jobs collection for jobId: ${jobId}`,
+						`❌ Job document not found in jobs collection for id: ${jobId}`,
 					);
 				} else {
 					console.log(
@@ -116,25 +117,25 @@ exports.createJobBid = async (req, res) => {
 						}`,
 					);
 
-					// Update the bids field in the jobs collection, not the bids collection
+					// Update the bids field in the jobs collection using "id" field, not "jobId"
 					const updateResult = await db
 						.collection("jobs")
-						.updateOne({ jobId }, { $inc: { bids: 1 } });
+						.updateOne({ id: jobId }, { $inc: { bids: 1 } });
 
 					if (updateResult.matchedCount === 0) {
 						console.error(
-							`❌ No job document matched in jobs collection with jobId: ${jobId}`,
+							`❌ No job document matched in jobs collection with id: ${jobId}`,
 						);
 					} else if (updateResult.modifiedCount === 0) {
 						console.error(
-							`❌ Job document found in jobs collection but 'bids' field not updated for jobId: ${jobId}`,
+							`❌ Job document found in jobs collection but 'bids' field not updated for id: ${jobId}`,
 						);
 
 						// Fallback: If increment failed, try setting the value directly in the jobs collection
 						const setResult = await db
 							.collection("jobs")
 							.updateOne(
-								{ jobId },
+								{ id: jobId },
 								{
 									$set: {
 										bids: job.bids
@@ -150,7 +151,7 @@ exports.createJobBid = async (req, res) => {
 						);
 					} else {
 						console.log(
-							`✅ Job 'bids' count incremented in jobs collection for jobId: ${jobId}`,
+							`✅ Job 'bids' count incremented in jobs collection for id: ${jobId}`,
 						);
 					}
 				}
