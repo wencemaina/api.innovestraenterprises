@@ -64,6 +64,7 @@ exports.createJobBid = async (req, res) => {
 		let bidId;
 		let message;
 		let statusCode = 201;
+		let isNewBid = false;
 
 		if (existingBid) {
 			// Update existing bid
@@ -88,6 +89,7 @@ exports.createJobBid = async (req, res) => {
 		} else {
 			// Generate custom bid ID for new bid
 			bidId = generateBidId();
+			isNewBid = true;
 
 			// Create new bid object with writer information included
 			const bid = {
@@ -112,6 +114,12 @@ exports.createJobBid = async (req, res) => {
 			// Store bid in database
 			await db.collection("bids").insertOne(bid);
 			message = "Bid submitted successfully";
+
+			// Increment the bids count on the job document
+			await db
+				.collection("jobs")
+				.updateOne({ jobId }, { $inc: { bids: 1 } });
+			console.log(`✅ Job bids count incremented for job: ${jobId}`);
 		}
 
 		// Create notification for the bid submission or update
