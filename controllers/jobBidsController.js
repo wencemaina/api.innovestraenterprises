@@ -54,7 +54,7 @@ exports.createJobBid = async (req, res) => {
 			bidId: bidId, // Add custom bid ID
 			jobId,
 			jobTitle,
-			bidAmount: `$${bidAmount}`, // Format as string with $ prefix like in the example
+			bidAmount: `${bidAmount}`, // Format as string with $ prefix like in the example
 			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
 			notes: notes, // Renamed from notes to coverLetter to match expected format
 			freelancer: {
