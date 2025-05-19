@@ -2,9 +2,12 @@ const express = require("express");
 const router = express.Router();
 
 const {
-	getAllNotifications,
-} = require("../controllers/getAllNotificationsController");
+	getWriterNotifications,
+	getEmployerNotifications,
+} = require("../controllers/notificationsController");
 
-router.get("/all", getAllNotifications);
+router.get("/writer/all", getWriterNotifications);
+
+router.get("/employer/all", getEmployerNotifications);
 
 module.exports = router;
