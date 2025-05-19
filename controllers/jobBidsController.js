@@ -24,10 +24,8 @@ exports.createJobBid = async (req, res) => {
 				message: "Writer not authenticated",
 			});
 		}
-
 		// Extract bid information from request body
 		const { jobId, jobTitle, bidAmount, deliveryDays, notes } = req.body;
-
 		// Validate required fields
 		if (!jobId || !bidAmount || !deliveryDays) {
 			return res.status(400).json({
@@ -35,41 +33,33 @@ exports.createJobBid = async (req, res) => {
 				message: "Missing required bid information",
 			});
 		}
-
 		// Get database connection
 		const db = await getDb();
-
 		// Fetch the writer's information to include in the bid
 		const writer = await db
 			.collection("users")
 			.findOne({ userId: writerId });
-
 		if (!writer) {
 			return res.status(404).json({
 				success: false,
 				message: "Writer not found",
 			});
 		}
-
 		// Check if a bid already exists for this writer and job
 		const existingBid = await db.collection("bids").findOne({
 			jobId,
 			"freelancer.id": writerId,
 		});
-
 		// Create current timestamp for submission
 		const submissionTime = new Date();
-
 		// Create or update bid
 		let bidId;
 		let message;
 		let statusCode = 201;
 		let isNewBid = false;
-
 		if (existingBid) {
 			// Update existing bid
 			bidId = existingBid.bidId;
-
 			await db.collection("bids").updateOne(
 				{ bidId },
 				{
@@ -83,14 +73,12 @@ exports.createJobBid = async (req, res) => {
 					},
 				},
 			);
-
 			message = "Bid updated successfully";
 			statusCode = 200;
 		} else {
 			// Generate custom bid ID for new bid
 			bidId = generateBidId();
 			isNewBid = true;
-
 			// Create new bid object with writer information included
 			const bid = {
 				bidId: bidId,
@@ -110,18 +98,16 @@ exports.createJobBid = async (req, res) => {
 				submittedAt: submissionTime,
 				createdAt: submissionTime,
 			};
-
 			// Store bid in database
 			await db.collection("bids").insertOne(bid);
 			message = "Bid submitted successfully";
 
-			// Increment the bids count on the job document
+			// Increment the bids count on the job document - moved inside new bid condition
 			await db
 				.collection("jobs")
 				.updateOne({ jobId }, { $inc: { bids: 1 } });
 			console.log(`✅ Job bids count incremented for job: ${jobId}`);
 		}
-
 		// Create notification for the bid submission or update
 		const notificationType = existingBid ? "bid_update" : "bid";
 		const notificationTitle = existingBid
@@ -130,7 +116,6 @@ exports.createJobBid = async (req, res) => {
 		const notificationDesc = existingBid
 			? `You have updated your bid to ${bidAmount} for job: ${jobTitle}`
 			: `You have submitted a bid of ${bidAmount} for job: ${jobTitle}`;
-
 		const notification = {
 			type: notificationType,
 			title: notificationTitle,
@@ -143,7 +128,6 @@ exports.createJobBid = async (req, res) => {
 			deliveryDays,
 			createdAt: submissionTime,
 		};
-
 		// Store notification in the notifications collection
 		await db.collection("notifications").insertOne(notification);
 		console.log(
@@ -151,7 +135,6 @@ exports.createJobBid = async (req, res) => {
 				existingBid ? "update" : "submission"
 			}`,
 		);
-
 		// Send success response
 		res.status(statusCode).json({
 			success: true,
