@@ -367,11 +367,11 @@ exports.acceptJobBid = async (req, res) => {
 			title: "Bid Accepted",
 			description: `Your bid of ${bid.bidAmount} for job: ${bid.jobTitle} has been accepted!`,
 			time: new Date(),
-			isRead: false, // Changed from 'read' to 'isRead'
-			writerId: bid.freelancer.id,
+			isRead: false,
+			writerId: bid.writer.id,
 			employerId,
 			jobId: bid.jobId,
-			bidId: bid.bidId, // Use bidId string
+			bidId: bid.bidId,
 			createdAt: new Date(),
 		};
 
@@ -380,11 +380,11 @@ exports.acceptJobBid = async (req, res) => {
 			id: employerNotificationId,
 			type: "bid_accepted",
 			title: "Bid Acceptance Confirmed",
-			description: `You have accepted ${bid.freelancer.name}'s bid of ${bid.bidAmount} for job: ${bid.jobTitle}`,
+			description: `You have accepted ${bid.writer.name}'s bid of ${bid.bidAmount} for job: ${bid.jobTitle}`,
 			time: new Date(),
 			isRead: false, // Changed from 'read' to 'isRead'
 			employerId,
-			writerId: bid.freelancer.id,
+			writerId: bid.writer.id,
 			jobId: bid.jobId,
 			bidId: bid.bidId, // Use bidId string
 			createdAt: new Date(),
@@ -406,7 +406,7 @@ exports.acceptJobBid = async (req, res) => {
 			description: `Your bid of ${declinedBid.bidAmount} for job: ${declinedBid.jobTitle} has been declined.`,
 			time: new Date(),
 			isRead: false, // Changed from 'read' to 'isRead'
-			writerId: declinedBid.freelancer.id,
+			writerId: declinedBid.writer.id,
 			employerId,
 			jobId: declinedBid.jobId,
 			bidId: declinedBid.bidId,
@@ -569,7 +569,7 @@ exports.getUserBids = async (req, res) => {
 		console.log(
 			`✅ Found and formatted ${formattedBids.length} bids for user ${writerId}`,
 		);
-
+		console.log(formattedBids);
 		// Return the formatted bids
 		res.status(200).json({
 			success: true,
