@@ -28,7 +28,11 @@ const {
 	getAllWriterBids,
 } = require("../controllers/getAllWriterBidsController");
 
-const { getJobById } = require("../controllers/getAllJobsController");
+const {
+	getJobById,
+	acceptJobBid,
+	getAcceptedBids,
+} = require("../controllers/getAllJobsController");
 
 // Apply the multer middleware directly in the route
 router.post("/create/new-job", upload.any(), createJob);
