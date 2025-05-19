@@ -56,7 +56,7 @@ exports.createJobBid = async (req, res) => {
 			jobTitle,
 			bidAmount: `$${bidAmount}`, // Format as string with $ prefix like in the example
 			deliveryTime: `${deliveryDays} days`, // Format as string with "days" suffix
-			coverLetter: notes, // Renamed from notes to coverLetter to match expected format
+			notes: notes, // Renamed from notes to coverLetter to match expected format
 			freelancer: {
 				id: writerId,
 				name: writer.personalInfo.name,
