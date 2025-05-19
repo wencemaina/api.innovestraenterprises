@@ -100,6 +100,7 @@ exports.createJobBid = async (req, res) => {
 		});
 	}
 };
+
 exports.getJobBids = async (req, res) => {
 	try {
 		const jobId = req.params.jobId;
