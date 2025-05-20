@@ -21,13 +21,10 @@ const {
 	getUserBids,
 	getEmployerBids,
 	declineJobBid,
+	getAllWriterBids,
 } = require("../controllers/jobBidsController");
 
 const { checkJobBid } = require("../controllers/checkBidsController");
-
-const {
-	getAllWriterBids,
-} = require("../controllers/getAllWriterBidsController");
 
 const { getJobById } = require("../controllers/getAllJobsController");
 
@@ -53,8 +50,6 @@ router.get("/job-bids/:jobId", getJobBids);
 router.post("/bids/accept/:bidId", acceptJobBid);
 
 router.post("/bids/decline/:bidId", declineJobBid);
-
-router.get("/get-writer-bids", getUserBids);
 
 router.put("/update-job/:jobId", upload.any(), updateJob);
 
