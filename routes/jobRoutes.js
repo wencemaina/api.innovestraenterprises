@@ -4,7 +4,7 @@ const multer = require("multer");
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-const { createJob } = require("../controllers/createJobController");
+const { createJob, updateJob } = require("../controllers/createJobController");
 const { getAllJobs } = require("../controllers/getAllJobsController");
 
 const { getEmployerJobs } = require("../controllers/getEmployerJobsController");
@@ -51,5 +51,7 @@ router.get("/job-bids/:jobId", getJobBids);
 router.post("/bids/accept/:bidId", acceptJobBid);
 
 router.get("/get-writer-bids", getUserBids);
+
+router.put("/update-job/:jobId", upload.any(), updateJob);
 
 module.exports = router;
