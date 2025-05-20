@@ -669,3 +669,115 @@ exports.getUserBids = async (req, res) => {
 		});
 	}
 };
+
+exports.getEmployerBids = async (req, res) => {
+	try {
+		// Get the employerId from the cookie
+		const employerId = req.cookies["YwAsmAN"];
+		if (!employerId) {
+			return res.status(401).json({
+				success: false,
+				message: "User not authenticated or cookie missing",
+			});
+		}
+
+		// Get database connection
+		const db = await getDb();
+
+		// Fetch jobs where the user is the employer
+		const employerJobs = await db
+			.collection("jobs")
+			.find({ employerId: employerId })
+			.sort({ createdAt: -1 })
+			.toArray();
+
+		// If no jobs found, return empty array
+		if (!employerJobs.length) {
+			return res.status(200).json({
+				success: true,
+				message: "No jobs found for this employer",
+				count: 0,
+				jobsWithBids: [],
+			});
+		}
+
+		// Extract job IDs to fetch bid details
+		const jobIds = employerJobs.map((job) => job.id);
+
+		// Fetch all bids for those job IDs
+		const allBids = await db
+			.collection("bids")
+			.find({ jobId: { $in: jobIds } })
+			.toArray();
+
+		// Group bids by jobId
+		const bidsByJob = {};
+		allBids.forEach((bid) => {
+			if (!bidsByJob[bid.jobId]) {
+				bidsByJob[bid.jobId] = [];
+			}
+			bidsByJob[bid.jobId].push(bid);
+		});
+
+		// Format jobs with their respective bids in the requested structure
+		const jobsWithBids = employerJobs.map((job) => {
+			const jobBids = bidsByJob[job.id] || [];
+
+			// Format each bid for this job
+			const formattedProposals = jobBids.map((bid) => {
+				return {
+					id: bid._id,
+					writer: {
+						name: bid.writer.name,
+						rating: bid.writer.rating,
+						completedJobs: bid.writer.completedJobs,
+						avatar: null, // Placeholder as this isn't in your schema
+					},
+					amount: `$${bid.bidAmount}`,
+					deliveryTime: bid.deliveryTime,
+					status:
+						bid.status.charAt(0).toUpperCase() +
+						bid.status.slice(1), // Capitalize status
+					proposal: bid.notes || "",
+					attachments: [], // Placeholder as this isn't in your schema
+				};
+			});
+
+			return {
+				jobId: job.id,
+				jobTitle: job.title,
+				budget: `$${job.budget}`,
+				deadline: new Date(job.deadline).toLocaleDateString("en-US", {
+					year: "numeric",
+					month: "long",
+					day: "numeric",
+				}),
+				proposals: formattedProposals,
+			};
+		});
+
+		// Filter out jobs with no bids if needed
+		const jobsWithBidsFiltered = jobsWithBids.filter(
+			(job) => job.proposals.length > 0,
+		);
+
+		console.log(
+			`✅ Found ${jobsWithBidsFiltered.length} jobs with bids for employer ${employerId}`,
+		);
+
+		// Return the formatted jobs with bids
+		res.status(200).json({
+			success: true,
+			message: "Employer jobs with bids retrieved successfully",
+			count: jobsWithBidsFiltered.length,
+			jobsWithBids: jobsWithBidsFiltered,
+		});
+	} catch (error) {
+		console.error("❌ Error fetching employer bids:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to fetch employer bids",
+			error: error.message,
+		});
+	}
+};
