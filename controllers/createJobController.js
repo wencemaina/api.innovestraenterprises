@@ -149,6 +149,35 @@ exports.createJob = async (req, res) => {
 	console.log("✨ createJob function execution completed");
 };
 
+// Helper function to generate unique notification ID
+function generateNotificationId() {
+	return (
+		"notif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9)
+	);
+}
+
+// Helper function to create notification objects
+function createNotification({
+	type,
+	title,
+	description,
+	userId,
+	jobId,
+	isEmployer = true,
+}) {
+	return {
+		id: generateNotificationId(),
+		type,
+		title,
+		description,
+		userId,
+		jobId,
+		isEmployer,
+		isRead: false,
+		createdAt: new Date(),
+	};
+}
+
 exports.updateJob = async (req, res) => {
 	console.log("🔄 Received job update request");
 	try {
@@ -350,6 +379,33 @@ exports.updateJob = async (req, res) => {
 			console.log(
 				`✅ Job updated successfully with _id: ${insertResult.insertedId}`,
 			);
+
+			// Create notification for the employer
+			try {
+				console.log("📢 Creating notification for job update");
+
+				const notification = createNotification({
+					type: "job_update",
+					title: "Job Updated",
+					description: `You have updated your job: ${updatedJobData.title}`,
+					userId: employerId,
+					jobId: jobId,
+					isEmployer: true,
+				});
+
+				// Store notification in the database
+				await db.collection("notifications").insertOne(notification);
+				console.log(
+					`✅ Created notification with ID: ${notification.id}`,
+				);
+			} catch (notificationError) {
+				console.error(
+					"⚠️ Error creating notification:",
+					notificationError,
+				);
+				// Continue execution - don't let notification failure stop the process
+			}
+
 			// Return success response with updated job data
 			console.log(
 				`🚀 Sending success response for updated job ${updatedJobData.id}`,
