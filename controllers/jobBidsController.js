@@ -13,11 +13,51 @@ function generateBidId() {
 	return `BID-${timestamp}-${randomPart}`.toUpperCase();
 }
 
+function generateBidId() {
+	const timestamp = Date.now().toString(36); // Convert timestamp to base36
+	const randomPart = crypto.randomBytes(4).toString("hex"); // Generate 8 random hex characters
+	return `BID-${timestamp}-${randomPart}`.toUpperCase();
+}
+
 // Helper function to generate unique notification ID
 function generateNotificationId() {
 	return (
 		"notif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9)
 	);
+}
+
+// Helper function to create notification objects
+function createNotification(options) {
+	const {
+		type,
+		title,
+		description,
+		userId,
+		jobId,
+		bidId,
+		deliveryDays,
+		bidAmount,
+		isEmployer = false,
+	} = options;
+
+	const submissionTime = new Date();
+	const notificationId = generateNotificationId();
+
+	return {
+		id: notificationId,
+		type: type,
+		title: title,
+		description: description,
+		time: submissionTime,
+		isRead: false,
+		userId: userId, // Changed from writerId to userId to be more generic
+		userType: isEmployer ? "employer" : "writer", // Add user type to distinguish notifications
+		jobId,
+		bidId: bidId,
+		bidAmount,
+		deliveryDays,
+		createdAt: submissionTime,
+	};
 }
 
 exports.createJobBid = async (req, res) => {
@@ -52,10 +92,21 @@ exports.createJobBid = async (req, res) => {
 				message: "Writer not found",
 			});
 		}
+
+		// Fetch the job to get the employer ID
+		const job = await db.collection("jobs").findOne({ id: jobId });
+		if (!job) {
+			return res.status(404).json({
+				success: false,
+				message: "Job not found",
+			});
+		}
+		const employerId = job.employerId;
+
 		// Check if a bid already exists for this writer and job
 		const existingBid = await db.collection("bids").findOne({
 			jobId,
-			"freelancer.id": writerId,
+			"writer.id": writerId,
 		});
 		// Create current timestamp for submission
 		const submissionTime = new Date();
@@ -112,7 +163,6 @@ exports.createJobBid = async (req, res) => {
 			// Increment the bids count field in the JOBS collection (not the bids collection)
 			try {
 				// IMPORTANT: In the database the field is named "id" not "jobId"
-				const job = await db.collection("jobs").findOne({ id: jobId });
 				if (!job) {
 					console.error(
 						`❌ Job document not found in jobs collection for id: ${jobId}`,
@@ -166,38 +216,71 @@ exports.createJobBid = async (req, res) => {
 				// Continue execution - don't let bid count update failure stop the process
 			}
 		}
-		// Create notification for the bid submission or update
-		const notificationType = existingBid ? "bid_update" : "bid";
-		const notificationTitle = existingBid
+
+		// Create notifications array to store all notifications
+		const notifications = [];
+
+		// 1. Create notification for the writer
+		const writerNotificationType = existingBid ? "bid_update" : "bid";
+		const writerNotificationTitle = existingBid
 			? "Bid Updated"
 			: "New Bid Submitted";
-		const notificationDesc = existingBid
+		const writerNotificationDesc = existingBid
 			? `You have updated your bid to ${bidAmount} for job: ${jobTitle}`
 			: `You have submitted a bid of ${bidAmount} for job: ${jobTitle}`;
 
-		// Generate unique notification ID
-		const notificationId = generateNotificationId();
-
-		const notification = {
-			id: notificationId, // Added unique notification ID
-			type: notificationType,
-			title: notificationTitle,
-			description: notificationDesc,
-			time: submissionTime,
-			isRead: false, // Changed from 'read: false' to 'isRead: false' for consistency
-			writerId,
+		const writerNotification = createNotification({
+			type: writerNotificationType,
+			title: writerNotificationTitle,
+			description: writerNotificationDesc,
+			userId: writerId,
 			jobId,
-			bidId: bidId,
+			bidId,
+			bidAmount,
 			deliveryDays,
-			createdAt: submissionTime,
-		};
-		// Store notification in the notifications collection
-		await db.collection("notifications").insertOne(notification);
-		console.log(
-			`✅ Notification created for bid ${
-				existingBid ? "update" : "submission"
-			} with ID: ${notificationId}`,
-		);
+			isEmployer: false,
+		});
+		notifications.push(writerNotification);
+
+		// 2. Create notification for the employer
+		if (employerId) {
+			const writerName = writer.personalInfo.name;
+			const employerNotificationType = existingBid
+				? "employer_bid_update"
+				: "employer_new_bid";
+			const employerNotificationTitle = existingBid
+				? "Bid Updated"
+				: "New Bid Received";
+			const employerNotificationDesc = existingBid
+				? `${writerName} has updated their bid to ${bidAmount} for your job: ${jobTitle}`
+				: `${writerName} has submitted a bid of ${bidAmount} for your job: ${jobTitle}`;
+
+			const employerNotification = createNotification({
+				type: employerNotificationType,
+				title: employerNotificationTitle,
+				description: employerNotificationDesc,
+				userId: employerId,
+				jobId,
+				bidId,
+				bidAmount,
+				deliveryDays,
+				isEmployer: true,
+			});
+			notifications.push(employerNotification);
+		} else {
+			console.log(
+				"⚠️ Employer ID not found, no employer notification created",
+			);
+		}
+
+		// Store all notifications in the notifications collection
+		if (notifications.length > 0) {
+			await db.collection("notifications").insertMany(notifications);
+			console.log(
+				`✅ Created ${notifications.length} notifications for bid ${bidId}`,
+			);
+		}
+
 		// Send success response
 		res.status(statusCode).json({
 			success: true,
