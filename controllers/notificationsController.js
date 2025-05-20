@@ -190,3 +190,74 @@ exports.clearAllNotifications = async (req, res) => {
 		res.status(500).json({ message: "Internal server error." });
 	}
 };
+
+/**
+ * Deletes a single notification by ID
+ * @route DELETE /api/notifications/:notificationId
+ */
+exports.deleteNotification = async (req, res) => {
+	try {
+		console.log("🗑️ Deleting notification");
+
+		// Get notification ID from params and rename it
+		const { id: notificationId } = req.params;
+
+		if (!notificationId) {
+			return res
+				.status(400)
+				.json({ message: "Notification ID is required." });
+		}
+
+		// Get user ID from cookies to ensure user can only delete their own notifications
+		const userId = req.cookies["YwAsmAN"];
+
+		if (!userId) {
+			return res
+				.status(400)
+				.json({ message: "User ID not found in cookies." });
+		}
+
+		const db = await getDb();
+
+		// Find the notification first to check if it belongs to the user
+		const notification = await db
+			.collection("notifications")
+			.findOne({ id: notificationId });
+
+		if (!notification) {
+			return res.status(404).json({ message: "Notification not found." });
+		}
+
+		// Check if the notification belongs to this user
+		if (
+			notification.writerId !== userId &&
+			notification.employerId !== userId
+		) {
+			return res
+				.status(403)
+				.json({
+					message:
+						"You are not authorized to delete this notification.",
+				});
+		}
+
+		// Delete the notification
+		const result = await db
+			.collection("notifications")
+			.deleteOne({ id: notificationId });
+
+		if (result.deletedCount === 0) {
+			return res
+				.status(404)
+				.json({ message: "Failed to delete notification." });
+		}
+
+		res.status(200).json({
+			success: true,
+			message: "Notification deleted successfully.",
+		});
+	} catch (error) {
+		console.error("Error deleting notification:", error);
+		res.status(500).json({ message: "Internal server error." });
+	}
+};
