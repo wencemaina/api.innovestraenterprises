@@ -1,4 +1,5 @@
 const { getDb } = require("../db");
+const crypto = require("crypto");
 
 exports.createJob = async (req, res) => {
 	console.log("🔄 Received job creation request");
@@ -30,10 +31,26 @@ exports.createJob = async (req, res) => {
 		const jobsCollection = db.collection("jobs");
 		console.log("📚 Connected to jobs collection");
 
-		// Generate a unique ID for the job
-		const jobsCount = await jobsCollection.countDocuments();
-		const jobId = (jobsCount + 1).toString();
-		console.log("🔑 Generated Job ID:", jobId);
+		// Generate a unique 8-character ID for the job
+		const generateUniqueId = () => {
+			// Generate a random buffer and convert to hex string
+			return crypto.randomBytes(4).toString("hex");
+		};
+
+		let jobId;
+		let isUnique = false;
+
+		// Keep generating IDs until we find a unique one
+		while (!isUnique) {
+			jobId = generateUniqueId();
+			// Check if this ID already exists in the database
+			const existingJob = await jobsCollection.findOne({ id: jobId });
+			if (!existingJob) {
+				isUnique = true;
+			}
+		}
+
+		console.log("🔑 Generated Unique Job ID:", jobId);
 
 		// Prepare the job object
 		console.log("🧩 Assembling job data object...");
