@@ -579,6 +579,139 @@ exports.getAcceptedBids = async (req, res) => {
 	}
 };
 
+exports.declineJobBid = async (req, res) => {
+	try {
+		console.log("🔄 Received job bid decline request", req.params);
+		// Extract bid ID from request parameters
+		const { bidId } = req.params;
+		if (!bidId) {
+			return res.status(400).json({
+				success: false,
+				message: "Bid ID is required",
+			});
+		}
+
+		// Extract employer ID from cookies
+		const employerId = req.cookies["YwAsmAN"];
+		if (!employerId) {
+			return res.status(401).json({
+				success: false,
+				message: "Employer not authenticated",
+			});
+		}
+
+		// Get database connection
+		const db = await getDb();
+
+		// Find the bid to decline using the string bidId
+		const bid = await db.collection("bids").findOne({
+			bidId: bidId,
+		});
+
+		if (!bid) {
+			return res.status(404).json({
+				success: false,
+				message: "Bid not found",
+			});
+		}
+
+		// Check if the bid is already declined or accepted
+		if (bid.status === "declined") {
+			return res.status(400).json({
+				success: false,
+				message: "This bid has already been declined",
+			});
+		}
+
+		if (bid.status === "accepted") {
+			return res.status(400).json({
+				success: false,
+				message: "Cannot decline a bid that has already been accepted",
+			});
+		}
+
+		// Update bid status to declined
+		await db.collection("bids").updateOne(
+			{ bidId: bidId },
+			{
+				$set: {
+					status: "declined",
+					declinedAt: new Date(),
+					declinedBy: employerId,
+				},
+			},
+		);
+
+		console.log(`✅ Bid ${bidId} marked as declined`);
+
+		// Get employer information for notification
+		const employer = await db
+			.collection("users")
+			.findOne({ userId: employerId });
+		const employerName = employer?.personalInfo?.name || "Employer";
+
+		// Generate notification IDs
+		const writerNotificationId = generateNotificationId();
+		const employerNotificationId = generateNotificationId();
+
+		// Create notification for the writer
+		const writerNotification = {
+			id: writerNotificationId,
+			type: "bid_declined",
+			title: "Bid Declined",
+			description: `Your bid of ${bid.bidAmount} for job: ${bid.jobTitle} has been declined.`,
+			time: new Date(),
+			isRead: false,
+			writerId: bid.writer.id,
+			employerId,
+			jobId: bid.jobId,
+			bidId: bid.bidId,
+			createdAt: new Date(),
+		};
+
+		// Create notification for the employer
+		const employerNotification = {
+			id: employerNotificationId,
+			type: "bid_declined",
+			title: "Bid Decline Confirmed",
+			description: `You have declined ${bid.writer.name}'s bid of ${bid.bidAmount} for job: ${bid.jobTitle}`,
+			time: new Date(),
+			isRead: false,
+			employerId,
+			writerId: bid.writer.id,
+			jobId: bid.jobId,
+			bidId: bid.bidId,
+			createdAt: new Date(),
+		};
+
+		// Store notifications in the database
+		await db
+			.collection("notifications")
+			.insertMany([writerNotification, employerNotification]);
+
+		console.log(
+			`✅ Notifications created for bid decline (writer: ${writerNotificationId}, employer: ${employerNotificationId})`,
+		);
+
+		// Send success response
+		res.status(200).json({
+			success: true,
+			message: "Bid declined successfully",
+			bid: {
+				...bid,
+				status: "declined",
+				declinedAt: new Date(),
+			},
+		});
+	} catch (error) {
+		console.error("❌ Error declining bid:", error);
+		res.status(500).json({
+			success: false,
+			message: "Failed to decline bid",
+		});
+	}
+};
+
 exports.getUserBids = async (req, res) => {
 	try {
 		// Get the writerId from the cookie
@@ -680,17 +813,14 @@ exports.getEmployerBids = async (req, res) => {
 				message: "User not authenticated or cookie missing",
 			});
 		}
-
 		// Get database connection
 		const db = await getDb();
-
 		// Fetch jobs where the user is the employer
 		const employerJobs = await db
 			.collection("jobs")
 			.find({ employerId: employerId })
 			.sort({ createdAt: -1 })
 			.toArray();
-
 		// If no jobs found, return empty array
 		if (!employerJobs.length) {
 			return res.status(200).json({
@@ -700,16 +830,13 @@ exports.getEmployerBids = async (req, res) => {
 				jobsWithBids: [],
 			});
 		}
-
 		// Extract job IDs to fetch bid details
 		const jobIds = employerJobs.map((job) => job.id);
-
 		// Fetch all bids for those job IDs
 		const allBids = await db
 			.collection("bids")
 			.find({ jobId: { $in: jobIds } })
 			.toArray();
-
 		// Group bids by jobId
 		const bidsByJob = {};
 		allBids.forEach((bid) => {
@@ -718,15 +845,13 @@ exports.getEmployerBids = async (req, res) => {
 			}
 			bidsByJob[bid.jobId].push(bid);
 		});
-
 		// Format jobs with their respective bids in the requested structure
 		const jobsWithBids = employerJobs.map((job) => {
 			const jobBids = bidsByJob[job.id] || [];
-
 			// Format each bid for this job
-			const formattedProposals = jobBids.map((bid) => {
+			const formattedBids = jobBids.map((bid) => {
 				return {
-					id: bid._id,
+					id: bid.bidId, // Using the correct bidId field from the database
 					writer: {
 						name: bid.writer.name,
 						rating: bid.writer.rating,
@@ -738,11 +863,10 @@ exports.getEmployerBids = async (req, res) => {
 					status:
 						bid.status.charAt(0).toUpperCase() +
 						bid.status.slice(1), // Capitalize status
-					proposal: bid.notes || "",
+					bids: bid.notes || "",
 					attachments: [], // Placeholder as this isn't in your schema
 				};
 			});
-
 			return {
 				jobId: job.id,
 				jobTitle: job.title,
@@ -752,19 +876,16 @@ exports.getEmployerBids = async (req, res) => {
 					month: "long",
 					day: "numeric",
 				}),
-				proposals: formattedProposals,
+				bids: formattedBids,
 			};
 		});
-
 		// Filter out jobs with no bids if needed
 		const jobsWithBidsFiltered = jobsWithBids.filter(
-			(job) => job.proposals.length > 0,
+			(job) => job.bids.length > 0,
 		);
-
 		console.log(
 			`✅ Found ${jobsWithBidsFiltered.length} jobs with bids for employer ${employerId}`,
 		);
-
 		// Return the formatted jobs with bids
 		res.status(200).json({
 			success: true,
