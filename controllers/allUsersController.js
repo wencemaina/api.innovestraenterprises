@@ -151,6 +151,8 @@ exports.deleteUser = async (req, res) => {
 exports.getCurrentUser = async (req, res) => {
 	try {
 		const userId = req.cookies["YwAsmAN"];
+
+		console.log("User ID from cookie:", userId);
 		if (!userId) {
 			return res.status(401).json({ error: "Not authenticated" });
 		}
