@@ -20,6 +20,7 @@ const {
 	getAcceptedBids,
 	getUserBids,
 	getEmployerBids,
+	declineJobBid,
 } = require("../controllers/jobBidsController");
 
 const { checkJobBid } = require("../controllers/checkBidsController");
@@ -50,6 +51,8 @@ router.get("/job-by-id/:jobId", getJobById);
 router.get("/job-bids/:jobId", getJobBids);
 
 router.post("/bids/accept/:bidId", acceptJobBid);
+
+router.post("/bids/decline/:bidId", declineJobBid);
 
 router.get("/get-writer-bids", getUserBids);
 
