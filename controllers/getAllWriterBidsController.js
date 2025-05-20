@@ -18,12 +18,72 @@ exports.getAllWriterBids = async (req, res) => {
 		// Connect to database
 		const db = await getDb();
 
-		// Fetch all bids for this writer
+		// Log the query parameters for debugging
+		console.log(`🔍 Searching for bids with writer.id: ${writerId}`);
+
+		// Fetch all bids for this writer - using the correct path to writerId
+		// Note: We're now matching on writer.id instead of writerId
 		const bids = await db
 			.collection("bids")
-			.find({ writerId })
+			.find({ "writer.id": writerId })
 			.sort({ createdAt: -1 }) // Sort by newest first
+			.project({
+				_id: 1,
+				bidId: 1,
+				jobId: 1,
+				jobTitle: 1,
+				bidAmount: 1,
+				deliveryTime: 1,
+				notes: 1,
+				writer: 1,
+				status: 1,
+				submittedAt: 1,
+				createdAt: 1,
+				acceptedAt: 1,
+				acceptedBy: 1,
+			}) // Explicitly include all fields
 			.toArray();
+
+		// Get all jobIds from the bids
+		const jobIds = [...new Set(bids.map((bid) => bid.jobId))];
+		console.log(`🔍 Found ${jobIds.length} unique job IDs to fetch`);
+
+		// Fetch all jobs corresponding to these bids
+		const jobs = await db
+			.collection("jobs")
+			.find({ id: { $in: jobIds } })
+			.project({
+				id: 1,
+				description: 1,
+				budget: 1,
+				title: 1,
+				deadline: 1,
+				wordCount: 1,
+				category: 1,
+			})
+			.toArray();
+
+		// Create a map of jobs for easy lookup
+		const jobsMap = jobs.reduce((map, job) => {
+			map[job.id] = job;
+			return map;
+		}, {});
+
+		// Enrich the bids with relevant job information
+		const enrichedBids = bids.map((bid) => {
+			const jobInfo = jobsMap[bid.jobId] || {};
+			return {
+				...bid,
+				jobDetails: {
+					description: jobInfo.description || "",
+					budget: jobInfo.budget || "",
+					title: jobInfo.title || bid.jobTitle || "", // Use existing jobTitle as fallback
+					deadline: jobInfo.deadline || "",
+					wordCount: jobInfo.wordCount || "",
+					category: jobInfo.category || "",
+				},
+			};
+		});
 
 		console.log(
 			`✅ Successfully fetched ${
@@ -31,31 +91,16 @@ exports.getAllWriterBids = async (req, res) => {
 			} bids for writer: ${writerId.substring(0, 8)}...`,
 		);
 
-		// If we want to enrich the bids with job details, we could do that here
-		// For example, getting job details for each bid to include more information
-		// This is optional and depends on how much job info you want to include
+		// Log a sample enriched bid to verify structure (only in development)
+		if (enrichedBids.length > 0) {
+			console.log(
+				"📄 Sample enriched bid structure:",
+				JSON.stringify(enrichedBids[0], null, 2),
+			);
+		}
 
-		/* 
-    // Example of enriching bids with job details (if needed)
-    const jobIds = [...new Set(bids.map(bid => bid.jobId))];
-    const jobs = await db
-      .collection("jobs")
-      .find({ id: { $in: jobIds } })
-      .toArray();
-    
-    const jobsMap = jobs.reduce((map, job) => {
-      map[job.id] = job;
-      return map;
-    }, {});
-    
-    const enrichedBids = bids.map(bid => ({
-      ...bid,
-      jobDetails: jobsMap[bid.jobId] || null
-    }));
-    */
-
-		// Return the bids
-		return res.status(200).json(bids);
+		// Return the enriched bid documents
+		return res.status(200).json(enrichedBids);
 	} catch (error) {
 		console.error("❌ Error fetching writer bids:", error);
 		return res.status(500).json({
