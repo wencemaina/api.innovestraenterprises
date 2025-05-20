@@ -7,6 +7,7 @@ const {
 	markNotificationAsRead,
 	markAllNotificationsAsRead,
 	clearAllNotifications,
+	deleteNotification,
 } = require("../controllers/notificationsController");
 
 router.get("/writer/all", getWriterNotifications);
@@ -18,5 +19,7 @@ router.put("/:notificationId/read", markNotificationAsRead);
 router.put("/read-all", markAllNotificationsAsRead);
 
 router.delete("/clear-all", clearAllNotifications);
+
+router.delete("/:id", deleteNotification);
 
 module.exports = router;
