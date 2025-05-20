@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const { v4: uuidv4 } = require("uuid");
-const { connectToMongo, getDb } = require("../db"); // Adjust the path if needed
+const { connectToMongo, getDb } = require("../db");
 
 exports.signUp = async (req, res) => {
 	console.log("Received signup request", req.body);
@@ -12,12 +12,10 @@ exports.signUp = async (req, res) => {
 			phone,
 			userType,
 			confirmPassword,
-			// Additional fields for writer account type
 			country,
 			memberSince,
 		} = req.body;
 
-		// Basic validation before hitting DB. Check for all required fields.
 		if (
 			!email?.trim() ||
 			!password?.trim() ||
@@ -33,19 +31,14 @@ exports.signUp = async (req, res) => {
 			});
 		}
 
-		// Check if password and confirmPassword match
 		if (password !== confirmPassword) {
 			return res.status(400).json({ message: "Passwords do not match" });
 		}
 
-		// For writer accounts, we'll use Kenya as default if country isn't provided
-		// No validation error since we'll use the default
-
-		await connectToMongo(); // Ensure MongoDB connection
+		await connectToMongo();
 		const db = getDb();
 		const usersCollection = db.collection("users");
 
-		// Check if the email is already registered
 		const existingUser = await usersCollection.findOne({
 			"personalInfo.email": email.toLowerCase(),
 		});
@@ -53,46 +46,87 @@ exports.signUp = async (req, res) => {
 		if (existingUser) {
 			return res
 				.status(409)
-				.json({ message: "Email already registered" }); // 409 Conflict
+				.json({ message: "Email already registered" });
 		}
 
-		// Generate a unique user ID
 		const userId = uuidv4();
+		const hashedPassword = await bcrypt.hash(password, 14);
+		const now = new Date();
 
-		// Hash the password
-		const hashedPassword = await bcrypt.hash(password, 14); // 14 is the salt rounds
-
-		// Construct the user data object with proper structure
 		const userData = {
-			userId: userId,
+			userId,
 			personalInfo: {
 				email: email.toLowerCase(),
-				name: name,
-				phone: phone,
+				name,
+				phone,
+				avatar: null, // placeholder for image stored in DB
+				bio: "",
+				location: country?.trim() || "Kenya",
+				languages: ["English"],
+				timezone: "Africa/Nairobi",
 			},
 			securityCredentials: {
 				hashed_password: hashedPassword,
+				twoFactorEnabled: false,
 			},
-			userType: userType,
-			createdAt: new Date(),
-			updatedAt: new Date(),
+			userType,
+			roles: [userType],
 			status: "active",
+			isVerified: false,
+			joinedDate: now,
+			lastLogin: null,
+			loginHistory: [],
+			notificationPreferences: {
+				email: false,
+				sms: false,
+				inApp: true,
+			},
+			categories: [],
+			experienceLevel: "",
+			education: "",
+			certifications: [],
+			portfolio: [],
+			writingSamples: [],
+			jobsCompleted: 0,
+			rating: 0,
+			reviews: [],
+			organizationName: "",
+			preferredWriters: [],
+			orderHistory: [],
+			paymentInfo: {
+				mpesaNumber: "",
+				paymentMethod: "",
+				paypalEmail: "",
+				bankAccountDetails: {
+					bankName: "",
+					accountNumber: "",
+					swiftCode: "",
+				},
+				pendingPayouts: 0,
+				totalPaid: 0,
+			},
+			subscriptionPlan: "basic",
+			subscriptionExpiresAt: null,
+			paymentStatus: "inactive",
+			referralCode: "",
+			referredBy: "",
+			supportTickets: [],
+			interests: [],
+			createdAt: now,
+			updatedAt: now,
 		};
 
-		// Add writer-specific fields if the account type is writer
 		if (userType === "writer") {
 			userData.writerProfile = {
-				country: country?.trim() || "Kenya", // Default to Kenya if not provided
-				memberSince: memberSince || new Date(), // Default to current date if not provided
-				completedJobs: 0, // Initialize to 0 for new writers
-				rating: 0, // Initialize rating to 0 for new writers
+				country: country?.trim() || "Kenya",
+				memberSince: memberSince || now,
+				completedJobs: 0,
+				rating: 0,
 			};
 		}
 
-		// Insert the new user into the users collection
 		const result = await usersCollection.insertOne(userData);
 
-		// Check if the insertion was successful
 		if (!result.acknowledged || !result.insertedId) {
 			console.error("Failed to insert new user:", result);
 			return res.status(500).json({
@@ -101,11 +135,9 @@ exports.signUp = async (req, res) => {
 			});
 		}
 
-		// Return success message and the new user's ID
 		return res.status(201).json({
-			// 201 Created
 			message: "User created successfully",
-			userId: userId,
+			userId,
 		});
 	} catch (error) {
 		console.error("Signup error:", error);
